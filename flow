@@ -3164,6 +3164,11 @@ def _enforce_workspace_only(raw_args: list[str]) -> None:
         return
     if os.environ.get("FLOW_FORCE_WORKSPACE_EXEC", "1") != "1":
         return
+    if os.environ.get("FLOW_SKIP_WORKSPACE_DELEGATION") == "1":
+        return
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        # GitHub-hosted runners execute `flow` on host by design.
+        return
     if not raw_args:
         return
 
