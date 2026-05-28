@@ -44,6 +44,7 @@ Usa el skill `workspace/skills-discover` cuando necesites buscar skills en tessl
 - When a root spec includes `targets` that point into a submodule, read the root spec first and then descend into the corresponding submodule `AGENTS.md` before editing code.
 - Treat `.flow/**` as operational state only. It helps with orchestration, but it never overrides `specs/**`.
 - Run workspace-managed toolchains from the devcontainer by default. Use `python3 ./flow workspace exec -- <cmd>` or `scripts/workspace_exec.sh <cmd>` from host.
+- Host-level `flow` execution is blocked by default (`FLOW_FORCE_WORKSPACE_EXEC=1`). Run via `flow workspace exec`/`scripts/workspace_exec.sh`; only `flow stack ...` and explicit `flow workspace exec -- ...` are allowed on host.
 - Run repo runtime commands in the repo service, not in `workspace`. Use `python3 ./flow repo exec <repo> -- <cmd>` for PHPUnit, Composer, pnpm, pytest, Go test, etc.
 - If the command validates a slice worktree, use `python3 ./flow repo exec <repo> --workdir <worktree> -- <cmd>` so module resolution, autoload, caches and relative paths come from the worktree under test.
 - If a slice is governance, enforcement, minimal-change, or verification-only, do not infer missing expansion work. Follow the spec's `surface_policy`, `minimum_valid_completion`, `validated_noop_allowed`, and `acceptable_evidence`.

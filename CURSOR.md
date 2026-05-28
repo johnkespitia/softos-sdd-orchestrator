@@ -9,6 +9,7 @@ Use this file when Cursor CLI does not load `.cursor/rules/**` automatically.
 - Read the active spec and `workspace.config.json` before non-trivial edits.
 - Resolve repo/runtime from spec `targets` and workspace routing.
 - Run workspace-managed commands from the devcontainer by default with `python3 ./flow workspace exec -- <cmd>` or `scripts/workspace_exec.sh <cmd>`.
+- `flow` en host está en modo estricto por defecto (`FLOW_FORCE_WORKSPACE_EXEC=1`): bloquea comandos no-`stack` fuera de `workspace` y exige `flow workspace exec -- ...`.
 - Run repo runtime commands in the repo service with `python3 ./flow repo exec <repo> -- <cmd>`. Do not run PHPUnit, Composer, pnpm, pytest or Go test in `workspace` when the repo has its own service.
 - When validating a slice worktree, use `python3 ./flow repo exec <repo> --workdir <worktree> -- <cmd>` so the runner resolves files from the slice under test, not from the base checkout.
 - For governance/enforcement/minimal-change/verification-only slices, honor the spec closeout contract: `surface_policy`, `minimum_valid_completion`, `validated_noop_allowed`, and `acceptable_evidence`.
