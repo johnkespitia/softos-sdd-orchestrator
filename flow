@@ -3152,9 +3152,33 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     require_dirs()
+    raw_args = sys.argv[1:]
+    _enforce_workspace_only(raw_args)
     parser = build_parser()
     args = parser.parse_args()
     return args.func(args)
+
+
+def _enforce_workspace_only(raw_args: list[str]) -> None:
+    if running_inside_workspace():
+        return
+    if os.environ.get("FLOW_FORCE_WORKSPACE_EXEC", "1") != "1":
+        return
+    if not raw_args:
+        return
+
+    top_level = raw_args[0]
+    if top_level == "stack":
+        # Stack lifecycle commands must run on host to create/recreate containers.
+        return
+    if top_level == "workspace" and len(raw_args) > 1 and raw_args[1] == "exec":
+        return
+
+    raise SystemExit(
+        "Host execution is blocked by FLOW_FORCE_WORKSPACE_EXEC=1. "
+        "Run commands via `python3 ./flow workspace exec -- python3 ./flow ...` "
+        "or `scripts/workspace_exec.sh python3 ./flow ...`."
+    )
 
 
 if __name__ == "__main__":

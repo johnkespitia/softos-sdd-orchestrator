@@ -8,6 +8,7 @@ Use this file as the root operational contract when the assistant does not load 
 - `.flow/**` is operational state only.
 - Read the target spec and `workspace.config.json` before non-trivial edits.
 - Run workspace-managed commands from the devcontainer by default with `python3 ./flow workspace exec -- <cmd>` or `scripts/workspace_exec.sh <cmd>`.
+- `flow` invoked from host is blocked by default (`FLOW_FORCE_WORKSPACE_EXEC=1`) unless it is `flow stack ...` or explicit `flow workspace exec -- ...`.
 - Run repo runtime commands in the repo service with `python3 ./flow repo exec <repo> -- <cmd>`. Reserve `workspace exec` for workspace-managed tooling.
 - If the command must validate a materialized slice, prefer `python3 ./flow repo exec <repo> --workdir <worktree> -- <cmd>` so runtime resolution happens against that worktree.
 - For governance/enforcement/minimal-change/verification-only slices, use the spec closeout contract instead of guessing whether more surface work is needed.
