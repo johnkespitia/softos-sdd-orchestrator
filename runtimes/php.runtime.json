@@ -1,0 +1,59 @@
+{
+  "runtime_kind": "project",
+  "target_roots": [
+    ".github",
+    "AGENTS.md",
+    "composer.json",
+    "src",
+    "tests",
+    "public"
+  ],
+  "default_targets": [
+    "../../{path}/src/**",
+    "../../{path}/tests/**"
+  ],
+  "test_runner": "php",
+  "test_hint": "../../{path}/tests",
+  "test_required_roots": [
+    "composer.json",
+    "src",
+    "tests"
+  ],
+  "placeholder_dirs": [
+    "src",
+    "tests",
+    "public"
+  ],
+  "placeholder_files": {
+    "composer.json": {
+      "name": "{name}",
+      "type": "project",
+      "require": {
+        "php": "^8.2"
+      }
+    },
+    "public/index.php": "<?php\necho 'Hello from generic PHP runtime';\n"
+  },
+  "agent_skill_refs": [
+    "workspace/softos-spec-definition-playbook",
+    "workspace/softos-reference-spec-hardening",
+    "workspace/softos-schema-hardening-gates",
+    "workspace/softos-staging-promote-preflight",
+    "workspace/softos-worktree-hygiene",
+    "workspace/spec-driven-workspace",
+    "workspace/php-core"
+  ],
+  "ci": {
+    "install": ["composer", "install"],
+    "test": ["vendor/bin/phpunit"]
+  },
+  "compose": {
+    "dockerfile": "backend.Dockerfile",
+    "mount_target": "/app",
+    "working_dir": "/app",
+    "command": "php -S 0.0.0.0:8000 -t public",
+    "default_port": 8000,
+    "networks": ["{network_name}"]
+  },
+  "notes": "Runtime genérico de PHP 8.2."
+}

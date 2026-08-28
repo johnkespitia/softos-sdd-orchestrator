@@ -1,0 +1,68 @@
+{
+  "project": {
+    "display_name": "SoftOS Agentic Workspace",
+    "root_repo": "softos-agentic"
+  },
+  "repos": {
+    "softos-agentic": {
+      "path": ".",
+      "kind": "root",
+      "slice_prefix": "root",
+      "compose_service": "workspace",
+      "target_roots": [
+        ".gitignore",
+        "AGENTS.md",
+        "CURSOR.md",
+        "OPENCODE.md",
+        "opencode.json",
+        "README.md",
+        "TODO.md",
+        ".agents",
+        ".cursor",
+        ".devcontainer",
+        ".mcp.example.json",
+        ".flow/memory",
+        "gateway",
+        "flow",
+        "templates",
+        "specs",
+        "docs",
+        ".tessl",
+        ".github",
+        "scripts",
+        "flowctl",
+        "capabilities",
+        "runtimes",
+        "workspace.capabilities.json",
+        "workspace.config.json",
+        "workspace.providers.json",
+        "workspace.runtimes.json",
+        "workspace.secrets.json",
+        "workspace.skills.json",
+        "workspace.stack.json",
+        "tessl.json",
+        "Makefile",
+        "policies",
+        "profiles"
+      ],
+      "default_targets": [
+        "../../specs/**/*.spec.md",
+        "../../docs/**/*.md",
+        "../../flow",
+        "../../workspace.config.json",
+        "../../workspace.stack.json",
+        "../../policies/**/*.md",
+        "../../profiles/**/*.md",
+        "../../profiles/**/*.json"
+      ]
+    }
+  },
+  "memory": {
+    "agent": {
+      "provider": "engram",
+      "project": "softos-agentic",
+      "data_dir": ".flow/memory/engram",
+      "source_boundary": "consultive"
+    }
+  }
+}

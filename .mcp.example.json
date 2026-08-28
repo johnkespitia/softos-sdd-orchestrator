@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "engram": {
+      "command": "engram",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "ENGRAM_PROJECT": "softos-agentic",
+        "ENGRAM_DATA_DIR": "/workspace/.flow/memory/engram"
+      }
+    }
+  }
+}

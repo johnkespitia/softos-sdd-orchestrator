@@ -1,0 +1,105 @@
+{
+  "runtime_kind": "project",
+  "target_roots": [
+    ".github",
+    "AGENTS.md",
+    "README.md",
+    "cmd",
+    "go.mod",
+    "go.sum",
+    "internal",
+    "pkg",
+    "tests"
+  ],
+  "default_targets": [
+    "../../{path}/cmd/**",
+    "../../{path}/internal/**",
+    "../../{path}/tests/**"
+  ],
+  "test_runner": "go",
+  "test_hint": "../../{path}/tests/...",
+  "test_required_roots": [
+    "cmd",
+    "go.mod",
+    "internal",
+    "tests"
+  ],
+  "placeholder_dirs": [
+    "cmd/api",
+    "internal",
+    "tests"
+  ],
+  "placeholder_files": {
+    "go.mod": "module workspace/{name}\n\ngo 1.18\n",
+    "cmd/api/main.go": "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"{name} bootstrap\")\n}\n"
+  },
+  "agent_skill_refs": [
+    "workspace/softos-spec-definition-playbook",
+    "workspace/softos-reference-spec-hardening",
+    "workspace/softos-schema-hardening-gates",
+    "workspace/softos-staging-promote-preflight",
+    "workspace/softos-worktree-hygiene",
+    "workspace/spec-driven-workspace",
+    "workspace/go-api-golang-pro"
+  ],
+  "ci": {
+    "install": [
+      "go",
+      "mod",
+      "download"
+    ],
+    "test": [
+      "go",
+      "test",
+      "./..."
+    ],
+    "build": [
+      "go",
+      "build",
+      "./..."
+    ]
+  },
+  "bindings": {
+    "postgres-service": {
+      "environment": {
+        "DATABASE_URL": "postgres://app:app@{service_name}:5432/app_dev?sslmode=disable"
+      },
+      "depends_on": {
+        "{service_name}": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "mongo-service": {
+      "environment": {
+        "MONGODB_URL": "mongodb://{service_name}:27017/app_dev"
+      },
+      "depends_on": {
+        "{service_name}": {
+          "condition": "service_started"
+        }
+      }
+    },
+    "mysql-service": {
+      "environment": {
+        "DATABASE_URL": "app:app@tcp({service_name}:3306)/app_dev"
+      },
+      "depends_on": {
+        "{service_name}": {
+          "condition": "service_healthy"
+        }
+      }
+    }
+  },
+  "compose": {
+    "dockerfile": "go.Dockerfile",
+    "mount_target": "/workspace/{repo_path}",
+    "working_dir": "/workspace/{repo_path}",
+    "command": "sleep infinity",
+    "default_port": 8080,
+    "networks": [
+      "{network_name}"
+    ]
+  },
+  "notes": "Runtime para APIs en Go con estructura cmd/internal/tests."
+}

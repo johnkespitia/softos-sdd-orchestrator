@@ -1,0 +1,46 @@
+services:
+
+  # ── Contenedor principal — Cursor se conecta aquí ──────────────────
+  workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: root
+    entrypoint: ["/usr/local/share/flow/workspace-entrypoint.sh"]
+    volumes:
+      - ..:/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+      - workspace-pnpm-store:/home/vscode/.local/share/pnpm/store
+    environment:
+      ENGRAM_PROJECT: ${ENGRAM_PROJECT:-softos-agentic}
+      ENGRAM_DATA_DIR: /workspace/.flow/memory/engram
+    working_dir: /workspace
+    command: sleep infinity
+    networks:
+      - workspace
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env.generated
+    environment:
+      PYTHONPATH: /workspace
+      FLOW_WORKSPACE_ROOT: /workspace
+    working_dir: /workspace/gateway
+    command: bash /workspace/scripts/gateway_central_start.sh
+    ports:
+      - "${SOFTOS_GATEWAY_HOST_PORT:-8010}:8010"
+    networks:
+      - workspace
+
+volumes:
+  workspace-pnpm-store:
+
+networks:
+  workspace:
+    driver: bridge

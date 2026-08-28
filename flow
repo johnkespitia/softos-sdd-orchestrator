@@ -1,0 +1,3190 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import textwrap
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from flowctl import agent_handoff as flow_agent_handoff
+from flowctl import features as flow_features
+from flowctl import evidence as flow_evidence
+from flowctl import gateway_ops as flow_gateway_ops
+from flowctl import locks as flow_locks
+from flowctl import memory_ops as flow_memory_ops
+from flowctl import policy as flow_policy
+from flowctl import skills_ops as flow_skills_ops
+from flowctl import specs as flow_specs
+from flowctl import stack_design as flow_stack_design
+from flowctl import stack_ops as flow_stack_ops
+from flowctl import tooling as flow_tooling
+from flowctl import workflows as flow_workflows
+from flowctl import workspace_ops as flow_workspace_ops
+from flowctl.contracts import (
+    contract_match_files as contracts_match_files,
+    extract_contract_declarations as contracts_extract_declarations,
+    render_contract_artifacts as contracts_render_artifacts,
+    validate_contract_declaration as contracts_validate_declaration,
+    verify_contract_declaration as contracts_verify_declaration,
+)
+from flowctl.contracts_ops import (
+    command_contract_verify as flow_command_contract_verify,
+    command_drift_check as flow_command_drift_check,
+    command_spec_guard as flow_command_spec_guard,
+    command_spec_generate_contracts as flow_command_spec_generate_contracts,
+    render_contract_artifacts as flow_render_contract_artifacts,
+    verify_contract_declaration as flow_verify_contract_declaration,
+)
+from flowctl.ci import (
+    command_ci_integration as flow_command_ci_integration,
+    command_ci_repo as flow_command_ci_repo,
+    command_ci_spec as flow_command_ci_spec,
+)
+from flowctl.context import (
+    build_workspace_context as flow_build_workspace_context,
+    env_first as flow_env_first,
+    load_providers_config as flow_load_providers_config,
+    load_secrets_config as flow_load_secrets_config,
+    load_skills_config as flow_load_skills_config,
+    load_json_object,
+)
+from flowctl.infra import (
+    command_infra_apply as flow_command_infra_apply,
+    command_infra_plan as flow_command_infra_plan,
+    command_infra_status as flow_command_infra_status,
+)
+from flowctl.gittools import (
+    git_changed_files as flow_git_changed_files,
+    git_diff_name_only as flow_git_diff_name_only,
+    git_output as flow_git_output,
+    git_scope as flow_git_scope,
+    normalize_scoped_git_paths as flow_normalize_scoped_git_paths,
+    repo_head_sha as flow_repo_head_sha,
+    repo_paths_changed_under_roots as flow_repo_paths_changed_under_roots,
+)
+from flowctl.doctor import command_doctor as flow_command_doctor
+from flowctl.parser import build_parser as flow_build_parser
+from flowctl.projects import repo_placeholder_text
+from flowctl.admin import (
+    auto_cleanup_stale_worktrees as flow_auto_cleanup_stale_worktrees,
+    command_providers_doctor as flow_command_providers_doctor,
+    command_providers_list as flow_command_providers_list,
+    command_secrets_doctor as flow_command_secrets_doctor,
+    command_secrets_exec as flow_command_secrets_exec,
+    command_secrets_list as flow_command_secrets_list,
+    command_secrets_scan as flow_command_secrets_scan,
+    command_secrets_sync as flow_command_secrets_sync,
+    command_submodule_doctor as flow_command_submodule_doctor,
+    command_submodule_sync as flow_command_submodule_sync,
+    command_worktree_clean as flow_command_worktree_clean,
+    command_worktree_create as flow_command_worktree_create,
+    command_worktree_list as flow_command_worktree_list,
+    inspect_submodule as flow_inspect_submodule,
+    render_secret_target as flow_render_secret_target,
+    resolve_secret_targets as flow_resolve_secret_targets,
+    staged_repo_files as flow_staged_repo_files,
+    submodule_repo_names as flow_submodule_repo_names,
+    tracked_repo_files as flow_tracked_repo_files,
+)
+from flowctl.providers import (
+    provider_categories as flow_provider_categories,
+    provider_config as flow_provider_config,
+    provider_default as flow_provider_default,
+    provider_enabled as flow_provider_enabled,
+    provider_entries as flow_provider_entries,
+    provider_entrypoint_path as flow_provider_entrypoint_path,
+    provider_missing_runtime as flow_provider_missing_runtime,
+    provider_requires as flow_provider_requires,
+    provider_section as flow_provider_section,
+    provider_static_env as flow_provider_static_env,
+    resolve_secret_value as flow_resolve_secret_value,
+    run_provider as flow_run_provider,
+    secrets_default_provider as flow_secrets_default_provider,
+    secrets_provider_config as flow_secrets_provider_config,
+    secrets_provider_enabled as flow_secrets_provider_enabled,
+    secrets_provider_entries as flow_secrets_provider_entries,
+    secrets_provider_env as flow_secrets_provider_env,
+    secrets_provider_entrypoint as flow_secrets_provider_entrypoint,
+    secrets_provider_requires as flow_secrets_provider_requires,
+    secrets_target_entries as flow_secrets_target_entries,
+    secrets_target_format as flow_secrets_target_format,
+    secrets_target_items as flow_secrets_target_items,
+    secrets_target_path as flow_secrets_target_path,
+    secrets_target_provider as flow_secrets_target_provider,
+    select_provider as flow_select_provider,
+)
+from flowctl.release import (
+    command_release_cut as flow_command_release_cut,
+    command_release_manifest as flow_command_release_manifest,
+    command_release_publish as flow_command_release_publish,
+    command_release_promote as flow_command_release_promote,
+    command_release_status as flow_command_release_status,
+    command_release_verify as flow_command_release_verify,
+)
+from flowctl.runtimes import (
+    RUNTIMES_CONFIG_FILENAME,
+    RuntimeCatalogError,
+    available_project_runtime_names,
+    available_runtime_names,
+    available_service_runtime_names,
+    resolve_runtime_pack,
+)
+from flowctl.secret_scan import scan_secret_paths as flow_scan_secret_paths
+from flowctl.state import (
+    relpath as flow_relpath,
+    read_state as flow_read_state,
+    require_dirs as flow_require_dirs,
+    slugify as flow_slugify,
+    state_path as flow_state_path,
+    utc_now as flow_utc_now,
+    write_json as flow_write_json,
+    write_state as flow_write_state,
+)
+from flowctl.stack import (
+    add_standalone_service_to_compose as flow_add_standalone_service_to_compose,
+    add_service_to_compose as flow_add_service_to_compose,
+    capture_compose as flow_capture_compose,
+    compose_base_command as flow_compose_base_command,
+    compose_exec_args as flow_compose_exec_args,
+    detect_compose_context as flow_detect_compose_context,
+    find_repo_compose_file as flow_find_repo_compose_file,
+    run_compose as flow_run_compose,
+    workspace_compose_files as flow_workspace_compose_files,
+    workspace_executable_available as flow_workspace_executable_available,
+)
+from flowctl.skills import (
+    local_skill_source as flow_local_skill_source,
+    normalize_skill_entry as flow_normalize_skill_entry,
+    normalize_skill_provider as flow_normalize_skill_provider,
+    serialize_skill_entry as flow_serialize_skill_entry,
+    skills_entries as flow_skills_entries,
+)
+from flowctl.testing import (
+    detect_test_command as flow_detect_test_command,
+    file_text as flow_file_text,
+    validate_test_reference_patterns as flow_validate_test_reference_patterns,
+)
+from flowctl.operations import (
+    collect_workflow_metrics as flow_collect_workflow_metrics,
+    collect_runs_dashboard_filtered as flow_collect_runs_dashboard_filtered,
+    collect_gateway_sqlite_task_metrics as flow_collect_gateway_sqlite_task_metrics,
+    evaluate_gateway_task_processing_sla as flow_evaluate_gateway_task_processing_sla,
+    evaluate_sla_alerts as flow_evaluate_sla_alerts,
+    append_decision as flow_append_decision,
+    read_decisions as flow_read_decisions,
+)
+
+ROOT = Path(__file__).resolve().parent
+FLOW_ROOT = ROOT / ".flow"
+STATE_ROOT = FLOW_ROOT / "state"
+PLAN_ROOT = FLOW_ROOT / "plans"
+REPORT_ROOT = FLOW_ROOT / "reports"
+CI_REPORT_ROOT = REPORT_ROOT / "ci"
+INFRA_REPORT_ROOT = REPORT_ROOT / "infra"
+SKILLS_REPORT_ROOT = REPORT_ROOT / "skills"
+SECRETS_REPORT_ROOT = REPORT_ROOT / "secrets"
+DRIFT_REPORT_ROOT = REPORT_ROOT / "drift"
+REPO_REPORT_ROOT = REPORT_ROOT / "repo"
+CONTRACT_REPORT_ROOT = REPORT_ROOT / "contracts"
+SECRET_SCAN_REPORT_ROOT = REPORT_ROOT / "secret-scan"
+WORKFLOW_REPORT_ROOT = REPORT_ROOT / "workflows"
+OPERATIONS_REPORT_ROOT = REPORT_ROOT / "operations"
+OPERATIONS_REPORT_ROOT = REPORT_ROOT / "operations"
+EVIDENCE_REPORT_ROOT = REPORT_ROOT / "evidence"
+AGENT_HANDOFF_REPORT_ROOT = REPORT_ROOT / "agent-handoffs"
+SPECS_ROOT = ROOT / "specs"
+FEATURE_SPECS = SPECS_ROOT / "features"
+DEVCONTAINER_COMPOSE_FILE = ROOT / ".devcontainer" / "docker-compose.yml"
+WORKSPACE_CONFIG_FILE = ROOT / "workspace.config.json"
+SKILLS_CONFIG_FILE = ROOT / "workspace.skills.json"
+RUNTIMES_CONFIG_FILE = ROOT / RUNTIMES_CONFIG_FILENAME
+PROVIDERS_CONFIG_FILE = ROOT / "workspace.providers.json"
+SECRETS_CONFIG_FILE = ROOT / "workspace.secrets.json"
+RELEASE_ROOT = ROOT / "releases"
+RELEASE_MANIFEST_ROOT = RELEASE_ROOT / "manifests"
+RELEASE_PROMOTION_ROOT = RELEASE_ROOT / "promotions"
+CHANGELOG_FILE = ROOT / "CHANGELOG.md"
+CONTRACTS_ROOT = ROOT / "contracts"
+GENERATED_CONTRACT_ROOT = CONTRACTS_ROOT / "generated"
+
+
+def wants_json(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "json", False))
+
+
+def json_dumps(payload: object) -> str:
+    return json.dumps(payload, indent=2, ensure_ascii=True)
+
+
+WORKSPACE_CONTEXT = flow_build_workspace_context(ROOT, RUNTIMES_CONFIG_FILENAME)
+WORKSPACE_CONFIG_FILE = WORKSPACE_CONTEXT["WORKSPACE_CONFIG_FILE"]
+CAPABILITIES_CONFIG_FILE = WORKSPACE_CONTEXT["CAPABILITIES_CONFIG_FILE"]
+SKILLS_CONFIG_FILE = WORKSPACE_CONTEXT["SKILLS_CONFIG_FILE"]
+PROVIDERS_CONFIG_FILE = WORKSPACE_CONTEXT["PROVIDERS_CONFIG_FILE"]
+SECRETS_CONFIG_FILE = WORKSPACE_CONTEXT["SECRETS_CONFIG_FILE"]
+STACK_CONFIG_FILE = WORKSPACE_CONTEXT["STACK_CONFIG_FILE"]
+RUNTIMES_CONFIG_FILE = WORKSPACE_CONTEXT["RUNTIMES_CONFIG_FILE"]
+WORKSPACE_CONFIG = WORKSPACE_CONTEXT["WORKSPACE_CONFIG"]
+PROJECT_CONFIG = WORKSPACE_CONTEXT["PROJECT_CONFIG"]
+REPO_CONFIG = WORKSPACE_CONTEXT["REPO_CONFIG"]
+PROJECT_NAME = WORKSPACE_CONTEXT["PROJECT_NAME"]
+ROOT_REPO = WORKSPACE_CONTEXT["ROOT_REPO"]
+REPO_NAMES = WORKSPACE_CONTEXT["REPO_NAMES"]
+WORKSPACE_SERVICE = WORKSPACE_CONTEXT["WORKSPACE_SERVICE"]
+WORKSPACE_PATH = WORKSPACE_CONTEXT["WORKSPACE_PATH"]
+DEFAULT_COMPOSE_PROJECT = WORKSPACE_CONTEXT["DEFAULT_COMPOSE_PROJECT"]
+HOST_ROOT_HINT = WORKSPACE_CONTEXT["HOST_ROOT_HINT"]
+WORKTREE_ROOT = WORKSPACE_CONTEXT["WORKTREE_ROOT"]
+DEFAULT_TARGETS = WORKSPACE_CONTEXT["DEFAULT_TARGETS"]
+TARGET_ROOTS = WORKSPACE_CONTEXT["TARGET_ROOTS"]
+TEST_REQUIRED_ROOTS = WORKSPACE_CONTEXT["TEST_REQUIRED_ROOTS"]
+CONTRACT_ROOTS = WORKSPACE_CONTEXT["CONTRACT_ROOTS"]
+REPO_PREFIXES = WORKSPACE_CONTEXT["REPO_PREFIXES"]
+TEST_HINTS = WORKSPACE_CONTEXT["TEST_HINTS"]
+
+REQUIRED_FRONTMATTER_FIELDS = ("name", "description", "status", "owner", "targets")
+TEST_REF_RE = re.compile(r"(?m)^[^\S\r\n]*(?:[-*]\s+)?\[@test\]\s+([^\s`]+)")
+TODO_RE = re.compile(r"\bTODO\b")
+
+SPEC_CONFIG = flow_specs.build_spec_config(
+    root=ROOT,
+    specs_root=SPECS_ROOT,
+    feature_specs=FEATURE_SPECS,
+    root_repo=ROOT_REPO,
+    default_targets=DEFAULT_TARGETS,
+    repo_prefixes=REPO_PREFIXES,
+    target_roots=TARGET_ROOTS,
+    test_required_roots=TEST_REQUIRED_ROOTS,
+    test_hints=TEST_HINTS,
+    required_frontmatter_fields=REQUIRED_FRONTMATTER_FIELDS,
+    test_ref_re=TEST_REF_RE,
+    todo_re=TODO_RE,
+)
+
+STATE_ORDER = [
+    "idea",
+    "draft-spec",
+    "reviewing-spec",
+    "approved-spec",
+    "planned",
+    "slice-ready",
+    "slice-started",
+    "implementing",
+    "in-review",
+    "in-qa",
+    "merged",
+    "released",
+]
+
+
+def env_first(*names: str, default: Optional[str] = None) -> Optional[str]:
+    return flow_env_first(*names, default=default)
+
+
+def load_workspace_config() -> dict[str, object]:
+    return flow_build_workspace_context(ROOT, RUNTIMES_CONFIG_FILENAME)["WORKSPACE_CONFIG"]
+
+
+def repo_config(repo: str) -> dict[str, object]:
+    return REPO_CONFIG[repo]
+
+
+def repo_strategy(repo: str) -> str:
+    return str(repo_config(repo).get("repo_strategy", "plain")).strip().lower() or "plain"
+
+
+def implementation_repos() -> list[str]:
+    return [
+        repo
+        for repo, config in REPO_CONFIG.items()
+        if str(config.get("kind", "implementation")) != "root"
+    ]
+
+
+def repo_compose_service(repo: str) -> str:
+    config = repo_config(repo)
+    explicit = str(config.get("compose_service", "")).strip()
+    if explicit:
+        return explicit
+    path = str(config.get("path", ".")).strip().strip("/")
+    if path and path != ".":
+        return Path(path).name
+    return repo
+
+
+def workspace_host_root() -> Path:
+    resolved_root = ROOT.resolve()
+    parts = list(resolved_root.parts)
+    if ".worktrees" in parts:
+        index = parts.index(".worktrees")
+        return Path(*parts[:index])
+    return HOST_ROOT_HINT
+
+
+def repo_container_workdir(repo_path: Path) -> Optional[str]:
+    workspace_root = WORKSPACE_PATH.rstrip("/")
+    resolved_repo = repo_path.resolve()
+    repo_text = resolved_repo.as_posix()
+    if repo_text == workspace_root or repo_text.startswith(f"{workspace_root}/"):
+        return repo_text
+
+    for candidate_root in [workspace_host_root().resolve(), HOST_ROOT_HINT.resolve()]:
+        try:
+            relative = resolved_repo.relative_to(candidate_root)
+            return f"{workspace_root}/{relative.as_posix()}"
+        except ValueError:
+            continue
+    return None
+
+
+def root_container_workdir() -> str:
+    return repo_container_workdir(ROOT) or WORKSPACE_PATH
+
+
+def runtime_path(path: Path) -> Path:
+    if running_inside_workspace():
+        mapped = repo_container_workdir(path)
+        if mapped:
+            return Path(mapped)
+    return path
+
+
+def wrap_repo_command_for_service(repo: str, repo_path: Path, command: list[str]) -> list[str]:
+    if os.environ.get("FLOW_SKIP_COMPOSE_WRAP") == "1" or os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        return command
+
+    service_name = repo_compose_service(repo)
+    if not service_name:
+        return command
+
+    workdir = repo_container_workdir(repo_path)
+    if not workdir:
+        return command
+
+    return [
+        *compose_base_command(),
+        *compose_exec_args(service_name, interactive=False, workdir=workdir),
+        *command,
+    ]
+
+
+def repo_prefix_examples() -> str:
+    prefixes = [f"'{prefix}'" for prefix in REPO_PREFIXES.values()]
+    return ", ".join(prefixes)
+
+
+def repo_slice_prefix(repo: str) -> str:
+    configured = str(repo_config(repo).get("slice_prefix", "")).strip()
+    if configured:
+        return slugify(configured)
+    path_name = str(repo_config(repo).get("path", repo)).strip("/.")
+    return slugify(path_name or repo)
+
+
+def normalize_repo_path(value: str) -> str:
+    return flow_workspace_ops.normalize_repo_path(value)
+
+
+def validate_identifier(value: str, label: str) -> str:
+    return flow_workspace_ops.validate_identifier(value, label)
+
+
+def repo_path_conflicts(repo_path: str) -> Optional[str]:
+    return flow_workspace_ops.repo_path_conflicts(repo_path, repo_config=REPO_CONFIG)
+
+
+def write_workspace_config(payload: dict[str, object]) -> None:
+    flow_workspace_ops.write_workspace_config(WORKSPACE_CONFIG_FILE, payload)
+
+
+def load_skills_config() -> dict[str, object]:
+    return flow_load_skills_config(SKILLS_CONFIG_FILE)
+
+
+def write_skills_config(payload: dict[str, object]) -> None:
+    SKILLS_CONFIG_FILE.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_providers_config() -> dict[str, object]:
+    return flow_load_providers_config(PROVIDERS_CONFIG_FILE)
+
+
+def load_secrets_config() -> dict[str, object]:
+    return flow_load_secrets_config(SECRETS_CONFIG_FILE)
+
+
+def add_service_to_compose(
+    service_name: str,
+    repo_path: str,
+    runtime: str,
+    port: Optional[int],
+    compose_config: dict[str, object],
+) -> None:
+    flow_add_service_to_compose(DEVCONTAINER_COMPOSE_FILE, service_name, repo_path, runtime, port, compose_config)
+
+
+def add_standalone_service_to_compose(
+    compose_file: Path,
+    service_name: str,
+    runtime: str,
+    compose_config: dict[str, object],
+) -> None:
+    flow_add_standalone_service_to_compose(compose_file, service_name, runtime, compose_config)
+
+
+def ensure_project_directory(path: Path, use_existing: bool) -> None:
+    flow_workspace_ops.ensure_project_directory(path, use_existing=use_existing, rel=rel)
+
+
+def command_add_project(args: argparse.Namespace) -> int:
+    return flow_workspace_ops.command_add_project(
+        args,
+        require_dirs=require_dirs,
+        root=ROOT,
+        root_repo=ROOT_REPO,
+        workspace_config=WORKSPACE_CONFIG,
+        workspace_config_file=WORKSPACE_CONFIG_FILE,
+        skills_config_file=SKILLS_CONFIG_FILE,
+        repo_config=REPO_CONFIG,
+        implementation_repos=implementation_repos,
+        slugify=slugify,
+        rel=rel,
+        resolve_runtime_pack=resolve_runtime_pack,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        repo_placeholder_text=repo_placeholder_text,
+        add_service_to_compose=add_service_to_compose,
+        runtime_catalog_error_type=RuntimeCatalogError,
+    )
+
+
+def utc_now() -> str:
+    return flow_utc_now()
+
+
+def slugify(value: str) -> str:
+    return flow_slugify(value)
+
+
+def require_dirs() -> None:
+    flow_require_dirs(
+        [
+            FLOW_ROOT,
+            STATE_ROOT,
+            PLAN_ROOT,
+            REPORT_ROOT,
+            CI_REPORT_ROOT,
+            INFRA_REPORT_ROOT,
+            SKILLS_REPORT_ROOT,
+            SECRETS_REPORT_ROOT,
+            DRIFT_REPORT_ROOT,
+            REPO_REPORT_ROOT,
+            CONTRACT_REPORT_ROOT,
+            SECRET_SCAN_REPORT_ROOT,
+            WORKFLOW_REPORT_ROOT,
+            EVIDENCE_REPORT_ROOT,
+            AGENT_HANDOFF_REPORT_ROOT,
+            FLOW_ROOT / "runs",
+            RELEASE_ROOT,
+            RELEASE_MANIFEST_ROOT,
+            RELEASE_PROMOTION_ROOT,
+            CONTRACTS_ROOT,
+            GENERATED_CONTRACT_ROOT,
+            SPECS_ROOT / "000-foundation",
+            SPECS_ROOT / "domains",
+            FEATURE_SPECS,
+            ROOT / "templates",
+            ROOT / "docs",
+        ]
+    )
+
+
+def repo_root(repo: str) -> Path:
+    relative = str(repo_config(repo).get("path", ".")).strip()
+    if repo == ROOT_REPO or relative in {"", "."}:
+        return ROOT
+    return ROOT / relative
+
+
+def parse_frontmatter(spec_path: Path) -> dict[str, object]:
+    return flow_specs.parse_frontmatter(spec_path)
+
+
+def replace_frontmatter_status(spec_path: Path, status: str) -> None:
+    flow_specs.replace_frontmatter_status(spec_path, status)
+
+
+def rel(path: Path) -> str:
+    return flow_relpath(ROOT, path)
+
+
+def state_path(slug: str) -> Path:
+    return flow_state_path(STATE_ROOT, slug)
+
+
+def read_state(slug: str) -> dict[str, object]:
+    return flow_read_state(STATE_ROOT, slug)
+
+
+def write_state(slug: str, payload: dict[str, object]) -> None:
+    flow_write_state(STATE_ROOT, slug, payload, now=utc_now())
+
+
+def all_spec_paths() -> list[Path]:
+    return flow_specs.all_spec_paths(SPEC_CONFIG)
+
+
+def git_scope(repo_path: Path) -> tuple[Optional[Path], Optional[str], Optional[str]]:
+    return flow_git_scope(repo_path)
+
+
+def normalize_scoped_git_paths(paths: list[str], prefix: Optional[str]) -> list[str]:
+    return flow_normalize_scoped_git_paths(paths, prefix)
+
+
+def git_diff_name_only(repo_path: Path, base: Optional[str] = None, head: Optional[str] = None) -> tuple[list[str], Optional[str]]:
+    return flow_git_diff_name_only(repo_path, base=base, head=head)
+
+
+def release_default_version() -> str:
+    return datetime.now(timezone.utc).strftime("%Y.%m.%d-%H%M%S")
+
+
+def classify_routed_path(raw_path: str) -> tuple[str, str]:
+    return flow_specs.classify_routed_path(raw_path, config=SPEC_CONFIG)
+
+
+def collect_routed_paths(paths: list[str]) -> tuple[dict[str, list[dict[str, str]]], list[str]]:
+    return flow_specs.collect_routed_paths(paths, config=SPEC_CONFIG)
+
+
+def require_routed_paths(paths: list[str], label: str) -> dict[str, list[dict[str, str]]]:
+    return flow_specs.require_routed_paths(paths, label, config=SPEC_CONFIG)
+
+
+def repos_missing_test_refs(
+    target_index: dict[str, list[dict[str, str]]],
+    test_index: dict[str, list[dict[str, str]]],
+) -> list[str]:
+    return flow_specs.repos_missing_test_refs(SPEC_CONFIG, target_index, test_index)
+
+
+def extract_test_references(text: str) -> list[str]:
+    return flow_specs.extract_test_references(text, config=SPEC_CONFIG)
+
+
+def count_todos(text: str) -> int:
+    return flow_specs.count_todos(text, config=SPEC_CONFIG)
+
+
+def render_test_plan_hints(repos: list[str]) -> str:
+    return flow_specs.render_test_plan_hints(SPEC_CONFIG, repos)
+
+
+def analyze_spec(spec_path: Path) -> dict[str, object]:
+    return flow_specs.analyze_spec(spec_path, config=SPEC_CONFIG)
+
+
+def test_reference_findings(analysis: dict[str, object]) -> list[str]:
+    return flow_specs.test_reference_findings(
+        analysis,
+        config=SPEC_CONFIG,
+        repo_root=repo_root,
+        validate_test_reference_patterns=validate_test_reference_patterns,
+    )
+
+
+def ensure_spec_ready_for_approval(spec_path: Path) -> dict[str, object]:
+    return flow_specs.ensure_spec_ready_for_approval(
+        spec_path,
+        config=SPEC_CONFIG,
+        repo_root=repo_root,
+        validate_test_reference_patterns=validate_test_reference_patterns,
+        available_project_runtime_names=lambda: available_project_runtime_names(ROOT),
+        available_service_runtime_names=lambda: available_service_runtime_names(ROOT),
+        available_capability_names=lambda: flow_stack_design.available_capability_names(ROOT),
+        resolve_runtime_pack=lambda runtime, repo_name, repo_path: resolve_runtime_pack(ROOT, runtime, repo_name, repo_path),
+        resolve_spec=resolve_spec,
+    )
+
+
+def git_changed_files(repo_path: Path) -> tuple[list[str], Optional[str]]:
+    return flow_git_changed_files(repo_path)
+
+
+def matches_any_pattern(path: str, patterns: list[str]) -> bool:
+    return flow_features.matches_any_pattern(path, patterns)
+
+
+def detect_test_command(repo: str, repo_path: Path, test_paths: list[str]) -> Optional[list[str]]:
+    runner = str(repo_config(repo).get("test_runner", "none")).strip().lower()
+    command = flow_detect_test_command(runner, repo_path, test_paths)
+    if not command:
+        return None
+    return wrap_repo_command_for_service(repo, repo_path, command)
+
+
+def file_text(path: Path) -> str:
+    return flow_file_text(path)
+
+
+def validate_test_reference_patterns(
+    repo: str,
+    repo_path: Path,
+    patterns: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    runner = str(repo_config(repo).get("test_runner", "none")).strip().lower()
+    return flow_validate_test_reference_patterns(repo_path, runner, patterns, repo_label=repo)
+
+
+def format_findings(findings: list[str]) -> list[str]:
+    return flow_specs.format_findings(findings)
+
+
+def spec_dependency_findings(analysis: dict[str, object]) -> list[str]:
+    return flow_specs.spec_dependency_findings(
+        analysis,
+        config=SPEC_CONFIG,
+        available_project_runtime_names=lambda: available_project_runtime_names(ROOT),
+        available_service_runtime_names=lambda: available_service_runtime_names(ROOT),
+        available_capability_names=lambda: flow_stack_design.available_capability_names(ROOT),
+        resolve_runtime_pack=lambda runtime, repo_name, repo_path: resolve_runtime_pack(ROOT, runtime, repo_name, repo_path),
+        resolve_spec=resolve_spec,
+        parse_frontmatter=parse_frontmatter,
+    )
+
+
+def frontmatter_list(frontmatter: dict[str, object], key: str) -> list[str]:
+    return flow_specs.frontmatter_list(frontmatter, key)
+
+
+def select_spec_paths(
+    spec_identifier: Optional[str] = None,
+    *,
+    all_specs: bool = False,
+    changed: bool = False,
+    base: Optional[str] = None,
+    head: Optional[str] = None,
+) -> list[Path]:
+    return flow_specs.select_spec_paths(
+        config=SPEC_CONFIG,
+        resolve_spec=resolve_spec,
+        git_diff_name_only=git_diff_name_only,
+        spec_identifier=spec_identifier,
+        all_specs=all_specs,
+        changed=changed,
+        base=base,
+        head=head,
+    )
+
+
+def write_json(path: Path, payload: dict[str, object]) -> None:
+    flow_write_json(path, payload)
+
+
+def capture_command(command: list[str], cwd: Path) -> dict[str, object]:
+    return flow_tooling.capture_command(command, cwd)
+
+
+def capture_workspace_tool(tool_args: list[str]) -> dict[str, object]:
+    return flow_tooling.capture_workspace_tool(
+        tool_args,
+        root=ROOT,
+        running_inside_workspace=running_inside_workspace,
+        capture_command=capture_command,
+        capture_compose=capture_compose,
+        compose_exec_args=compose_exec_args,
+        workspace_service=WORKSPACE_SERVICE,
+        workspace_path=WORKSPACE_PATH,
+    )
+
+
+def normalize_skill_provider(value: str) -> str:
+    return flow_normalize_skill_provider(value)
+
+
+def skills_provider_config(payload: dict[str, object], provider: str) -> dict[str, object]:
+    return flow_skills_ops.skills_provider_config(payload, provider)
+
+
+def skills_provider_enabled(payload: dict[str, object], provider: str) -> bool:
+    return flow_skills_ops.skills_provider_enabled(payload, provider)
+
+
+def skills_provider_runtime_available(provider: str) -> bool:
+    return flow_skills_ops.skills_provider_runtime_available(
+        provider,
+        workspace_executable_available=workspace_executable_available,
+    )
+
+
+def provider_categories() -> list[str]:
+    return flow_provider_categories()
+
+
+def provider_section(payload: dict[str, object], category: str) -> dict[str, object]:
+    return flow_provider_section(payload, category, manifest_name=PROVIDERS_CONFIG_FILE.name)
+
+
+def provider_entries(payload: dict[str, object], category: str) -> dict[str, dict[str, object]]:
+    return flow_provider_entries(payload, category, manifest_name=PROVIDERS_CONFIG_FILE.name)
+
+
+def provider_default(payload: dict[str, object], category: str) -> str:
+    return flow_provider_default(payload, category, manifest_name=PROVIDERS_CONFIG_FILE.name)
+
+
+def provider_config(payload: dict[str, object], category: str, provider: str) -> dict[str, object]:
+    return flow_provider_config(payload, category, provider, manifest_name=PROVIDERS_CONFIG_FILE.name)
+
+
+def provider_enabled(config: dict[str, object]) -> bool:
+    return flow_provider_enabled(config)
+
+
+def provider_entrypoint_path(config: dict[str, object]) -> Path:
+    return flow_provider_entrypoint_path(ROOT, config)
+
+
+def provider_requires(config: dict[str, object]) -> list[str]:
+    return flow_provider_requires(config)
+
+
+def provider_static_env(config: dict[str, object]) -> dict[str, str]:
+    return flow_provider_static_env(config)
+
+
+def provider_missing_runtime(config: dict[str, object]) -> list[str]:
+    return flow_provider_missing_runtime(config)
+
+
+def select_provider(payload: dict[str, object], category: str, explicit: Optional[str] = None) -> tuple[str, dict[str, object]]:
+    return flow_select_provider(
+        ROOT,
+        payload,
+        category,
+        manifest_name=PROVIDERS_CONFIG_FILE.name,
+        relativize=rel,
+        explicit=explicit,
+    )
+
+
+def run_provider(category: str, action: str, provider_name: str, config: dict[str, object], env: dict[str, str]) -> dict[str, object]:
+    return flow_run_provider(ROOT, WORKSPACE_PATH, category, action, provider_name, config, env, relativize=rel)
+
+
+def secrets_provider_entries(payload: dict[str, object]) -> dict[str, dict[str, object]]:
+    return flow_secrets_provider_entries(payload, manifest_name=SECRETS_CONFIG_FILE.name)
+
+
+def secrets_default_provider(payload: dict[str, object]) -> str:
+    return flow_secrets_default_provider(payload, manifest_name=SECRETS_CONFIG_FILE.name)
+
+
+def secrets_provider_config(payload: dict[str, object], provider: str) -> dict[str, object]:
+    return flow_secrets_provider_config(payload, provider, manifest_name=SECRETS_CONFIG_FILE.name)
+
+
+def secrets_target_entries(payload: dict[str, object]) -> dict[str, dict[str, object]]:
+    return flow_secrets_target_entries(payload, manifest_name=SECRETS_CONFIG_FILE.name)
+
+
+def secrets_target_path(raw_target: dict[str, object]) -> Path:
+    return flow_secrets_target_path(ROOT, raw_target)
+
+
+def secrets_target_items(raw_target: dict[str, object]) -> dict[str, str]:
+    items = raw_target.get("items", {})
+    if not isinstance(items, dict):
+        raise ValueError("`items` debe ser un objeto key/value.")
+    normalized: dict[str, str] = {}
+    for key, value in items.items():
+        key_name = str(key).strip()
+        if not key_name:
+            raise ValueError("Los items de secrets deben tener claves no vacias.")
+        normalized[key_name] = str(value)
+    return normalized
+
+
+def secrets_target_format(raw_target: dict[str, object]) -> str:
+    return flow_secrets_target_format(raw_target)
+
+
+def secrets_target_provider(payload: dict[str, object], raw_target: dict[str, object]) -> str:
+    return flow_secrets_target_provider(payload, raw_target, manifest_name=SECRETS_CONFIG_FILE.name)
+
+
+def secrets_provider_enabled(config: dict[str, object]) -> bool:
+    return bool(config.get("enabled", True))
+
+
+def secrets_provider_requires(config: dict[str, object]) -> list[str]:
+    raw = config.get("requires", [])
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(item, str) and item.strip() for item in raw):
+        raise ValueError("`requires` debe ser una lista de strings si existe.")
+    return [item.strip() for item in raw]
+
+
+def secrets_provider_env(config: dict[str, object]) -> dict[str, str]:
+    return flow_secrets_provider_env(config)
+
+
+def secrets_provider_entrypoint(config: dict[str, object]) -> Path:
+    return flow_secrets_provider_entrypoint(ROOT, config)
+
+
+def resolve_secret_value(provider_name: str, config: dict[str, object], reference: str) -> tuple[Optional[str], Optional[str]]:
+    return flow_resolve_secret_value(ROOT, provider_name, config, reference, relativize=rel)
+
+
+def gateway_host_port() -> str:
+    value = env_first("SOFTOS_GATEWAY_HOST_PORT", default="8010")
+    return str(value).strip() or "8010"
+
+
+def gateway_connection() -> dict[str, str]:
+    gateway = WORKSPACE_CONFIG.get("gateway")
+    gateway_cfg = gateway if isinstance(gateway, dict) else {}
+    connection = gateway_cfg.get("connection")
+    connection_cfg = connection if isinstance(connection, dict) else {}
+    return {
+        "mode": str(connection_cfg.get("mode", "") or "").strip().lower(),
+        "base_url": str(connection_cfg.get("base_url", "") or "").strip().rstrip("/"),
+    }
+
+
+def devcontainer_env_targets() -> list[tuple[str, Path]]:
+    payload = load_secrets_config()
+    targets = secrets_target_entries(payload)
+    matched: list[tuple[str, Path]] = []
+
+    if "devcontainer_env" in targets:
+        return [("devcontainer_env", secrets_target_path(targets["devcontainer_env"]))]
+
+    for target_name, raw_target in targets.items():
+        target_path = secrets_target_path(raw_target)
+        try:
+            relative_path = target_path.resolve().relative_to(ROOT.resolve())
+        except ValueError:
+            continue
+        if relative_path == Path(".devcontainer/.env.generated"):
+            matched.append((target_name, target_path))
+    return matched
+
+
+def ensure_devcontainer_env(*, force: bool = False) -> int:
+    targets = devcontainer_env_targets()
+    if not targets:
+        return 0
+    if not force and all(target_path.is_file() for _, target_path in targets):
+        return 0
+
+    target_names = [target_name for target_name, _ in targets]
+    action = "Regenerando" if force else "Materializando"
+    print(f"{action} `.devcontainer/.env.generated` para el stack del workspace.")
+    return flow_command_secrets_sync(
+        argparse.Namespace(target=target_names, dry_run=False, json=False),
+        load_secrets_config=load_secrets_config,
+        secrets_target_entries=secrets_target_entries,
+        secrets_target_provider=secrets_target_provider,
+        secrets_provider_config=secrets_provider_config,
+        secrets_provider_enabled=secrets_provider_enabled,
+        secrets_target_items=secrets_target_items,
+        resolve_secret_value=resolve_secret_value,
+        secrets_target_path=secrets_target_path,
+        secrets_target_format=secrets_target_format,
+        render_secret_target_fn=render_secret_target,
+        rel=rel,
+        utc_now=utc_now,
+        write_json=write_json,
+        secrets_report_root=SECRETS_REPORT_ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def extract_contract_declarations(text: str) -> tuple[list[dict[str, object]], list[str]]:
+    return contracts_extract_declarations(text)
+
+
+def validate_contract_declaration(declaration: dict[str, object]) -> tuple[Optional[dict[str, object]], Optional[str]]:
+    return contracts_validate_declaration(declaration, set(REPO_CONFIG))
+
+
+def contract_match_files(repo: str, patterns: list[str]) -> list[Path]:
+    return contracts_match_files(repo_root(repo), patterns)
+
+
+def repo_paths_changed_under_roots(repo: str, changed_files: list[str]) -> list[str]:
+    return flow_repo_paths_changed_under_roots(repo, changed_files, contract_roots=CONTRACT_ROOTS)
+
+
+def submodule_repo_names() -> list[str]:
+    return flow_submodule_repo_names(REPO_NAMES, repo_strategy)
+
+
+def git_output(command: list[str], cwd: Optional[Path] = None) -> tuple[int, str, str]:
+    return flow_git_output(command, cwd=cwd, root=ROOT)
+
+
+def inspect_submodule(repo: str) -> dict[str, object]:
+    return flow_inspect_submodule(
+        repo,
+        root=ROOT,
+        repo_config=repo_config,
+        repo_root=repo_root,
+        repo_strategy=repo_strategy,
+        git_output=git_output,
+    )
+
+
+def local_skill_source(source: str) -> Optional[Path]:
+    return flow_local_skill_source(ROOT, source)
+
+
+def normalize_skill_entry(raw: object, index: int) -> dict[str, object]:
+    return flow_normalize_skill_entry(ROOT, raw, index)
+
+
+def skills_entries(payload: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+    return flow_skills_entries(ROOT, payload)
+
+
+def skills_report_stamp() -> str:
+    return flow_skills_ops.skills_report_stamp(utc_now=utc_now)
+
+
+def command_has_flag(command: list[str], *flags: str) -> bool:
+    return flow_skills_ops.command_has_flag(command, *flags)
+
+
+def tessl_skill_commands(entry: dict[str, object]) -> list[list[str]]:
+    return flow_skills_ops.tessl_skill_commands(entry, rel=rel)
+
+
+def skills_sh_commands(entry: dict[str, object]) -> list[list[str]]:
+    return flow_skills_ops.skills_sh_commands(entry)
+
+
+def skill_entry_commands(entry: dict[str, object]) -> list[list[str]]:
+    return flow_skills_ops.skill_entry_commands(entry, rel=rel)
+
+
+def configured_repo_ci_commands(repo: str) -> list[tuple[str, list[str]]]:
+    config = repo_config(repo).get("ci")
+    if not isinstance(config, dict):
+        return []
+
+    commands: list[tuple[str, list[str]]] = []
+    for step, label in [("install", "Install"), ("lint", "Lint"), ("test", "Tests"), ("build", "Build")]:
+        raw_command = config.get(step)
+        if not isinstance(raw_command, list) or not all(isinstance(part, str) for part in raw_command):
+            continue
+        command = [part for part in raw_command if part]
+        if command:
+            commands.append((label, command))
+    return commands
+
+
+def repo_ci_commands(repo: str, repo_path: Path, skip_install: bool) -> list[tuple[str, list[str]]]:
+    runner = str(repo_config(repo).get("test_runner", "none")).strip().lower()
+
+    if repo == ROOT_REPO:
+        return []
+
+    configured = configured_repo_ci_commands(repo)
+    if configured:
+        if skip_install:
+            configured = [item for item in configured if item[0] != "Install"]
+        return [(label, wrap_repo_command_for_service(repo, repo_path, command)) for label, command in configured]
+
+    if runner == "none":
+        return []
+
+    if runner == "php":
+        composer_json = repo_path / "composer.json"
+        if not composer_json.exists():
+            return []
+
+        commands: list[tuple[str, list[str]]] = []
+        if not skip_install:
+            commands.append(("Install", ["composer", "install", "--no-interaction", "--prefer-dist"]))
+
+        artisan = repo_path / "artisan"
+        phpunit = repo_path / "vendor" / "bin" / "phpunit"
+        if artisan.exists():
+            commands.append(("Tests", ["php", "artisan", "test"]))
+        elif phpunit.exists():
+            commands.append(("Tests", [str(phpunit)]))
+        return [(label, wrap_repo_command_for_service(repo, repo_path, command)) for label, command in commands]
+
+    if runner == "pnpm":
+        package_json = repo_path / "package.json"
+        if not package_json.exists():
+            return []
+
+        try:
+            package = json.loads(package_json.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return []
+
+        scripts = package.get("scripts", {})
+        if not isinstance(scripts, dict):
+            scripts = {}
+
+        commands = []
+        if not skip_install:
+            install_command = ["pnpm", "install", "--frozen-lockfile"] if (repo_path / "pnpm-lock.yaml").exists() else ["pnpm", "install"]
+            commands.append(("Install", install_command))
+
+        for script_name, label in [("lint", "Lint"), ("test", "Tests"), ("build", "Build")]:
+            if script_name in scripts:
+                commands.append((label, ["pnpm", script_name]))
+        return [(label, wrap_repo_command_for_service(repo, repo_path, command)) for label, command in commands]
+
+    if runner == "pytest":
+        if shutil.which("pytest"):
+            return [("Tests", wrap_repo_command_for_service(repo, repo_path, ["pytest"]))]
+
+    if runner == "go":
+        go_mod = repo_path / "go.mod"
+        if go_mod.exists() and shutil.which("go"):
+            commands: list[tuple[str, list[str]]] = []
+            if not skip_install:
+                commands.append(("Install", ["go", "mod", "download"]))
+            commands.append(("Tests", ["go", "test", "./..."]))
+            commands.append(("Build", ["go", "build", "./..."]))
+            return [(label, wrap_repo_command_for_service(repo, repo_path, command)) for label, command in commands]
+
+    return []
+
+
+def release_manifest_path(version: str) -> Path:
+    return RELEASE_MANIFEST_ROOT / f"{version}.json"
+
+
+def release_promotion_path(version: str, environment: str) -> Path:
+    return RELEASE_PROMOTION_ROOT / f"{version}-{environment}.json"
+
+
+def release_verification_path(version: str, environment: str) -> Path:
+    return RELEASE_PROMOTION_ROOT / f"{version}-{environment}-verification.json"
+
+
+def load_release_manifest(version: str) -> dict[str, object]:
+    path = release_manifest_path(version)
+    if not path.exists():
+        raise SystemExit(f"No existe manifest de release para `{version}`.")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def repo_head_sha(repo: str) -> str:
+    return flow_repo_head_sha(repo, repo_root=repo_root)
+
+
+def releasable_feature_specs() -> list[Path]:
+    selected: list[Path] = []
+    for spec_path in sorted(FEATURE_SPECS.glob("*.spec.md")):
+        analysis = analyze_spec(spec_path)
+        if not flow_specs.frontmatter_status_allows_execution(analysis["frontmatter"].get("status")):
+            continue
+        state = read_state(spec_slug(spec_path))
+        if str(state.get("status", "")) == "released":
+            continue
+        selected.append(spec_path)
+    return selected
+
+
+def release_hook(environment: str) -> Optional[Path]:
+    specific = ROOT / "scripts" / "release" / f"promote_{environment}.sh"
+    generic = ROOT / "scripts" / "release" / "promote.sh"
+    for candidate in [specific, generic]:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def infra_hook(action: str) -> Optional[Path]:
+    specific = ROOT / "scripts" / "infra" / f"{action}.sh"
+    if specific.is_file():
+        return specific
+    return None
+
+
+def detect_compose_context() -> dict[str, object]:
+    expected_files = compose_control_files()
+    if not shutil.which("docker") and not shutil.which("docker-compose"):
+        return {
+            "project": DEFAULT_COMPOSE_PROJECT,
+            "files": expected_files,
+            "active": False,
+        }
+    return flow_detect_compose_context(
+        compose_control_file(),
+        DEFAULT_COMPOSE_PROJECT,
+        running_inside_workspace=running_inside_workspace(),
+        expected_files=expected_files,
+    )
+
+
+def compose_base_command() -> list[str]:
+    context = detect_compose_context()
+    files = context.get("files", compose_control_files())
+    return flow_compose_base_command(
+        str(context["project"]),
+        [Path(item).resolve() for item in files],
+    )
+
+
+def tty_enabled() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def running_inside_workspace() -> bool:
+    workspace_root = WORKSPACE_PATH.rstrip("/")
+    root_path = ROOT.as_posix()
+    return root_path == workspace_root or root_path.startswith(f"{workspace_root}/")
+
+
+def compose_control_root() -> Path:
+    host_root = workspace_host_root()
+    if running_inside_workspace():
+        return host_root
+    if ROOT.resolve() != host_root.resolve():
+        return host_root
+    return ROOT
+
+
+def compose_control_file() -> Path:
+    return compose_control_root() / ".devcontainer" / "docker-compose.yml"
+
+
+def compose_control_files() -> list[Path]:
+    return flow_workspace_compose_files(compose_control_file(), load_workspace_config())
+
+
+def compose_exec_args(
+    service: str,
+    interactive: Optional[bool] = None,
+    workdir: Optional[str] = None,
+) -> list[str]:
+    use_tty = tty_enabled() if interactive is None else interactive
+    return flow_compose_exec_args(service, use_tty=use_tty, workdir=workdir)
+
+
+def run_compose(extra_args: list[str], interactive: Optional[bool] = None) -> int:
+    return flow_run_compose(compose_base_command(), compose_control_root(), extra_args)
+
+
+def capture_compose(extra_args: list[str]) -> dict[str, object]:
+    return flow_capture_compose(compose_base_command(), compose_control_root(), extra_args)
+
+
+def normalize_passthrough(args: list[str]) -> list[str]:
+    return flow_tooling.normalize_passthrough(args)
+
+
+def run_workspace_tool(
+    tool_args: list[str],
+    interactive: Optional[bool] = None,
+    workdir: Optional[str] = None,
+) -> int:
+    return flow_tooling.run_workspace_tool(
+        tool_args,
+        run_compose=run_compose,
+        compose_exec_args=compose_exec_args,
+        workspace_service=WORKSPACE_SERVICE,
+        workspace_path=WORKSPACE_PATH,
+        interactive=interactive,
+        workdir=workdir,
+    )
+
+
+def workspace_executable_available(executable: str) -> bool:
+    return flow_workspace_executable_available(
+        executable,
+        running_inside_workspace=running_inside_workspace(),
+        workspace_service=WORKSPACE_SERVICE,
+        workspace_path=WORKSPACE_PATH,
+        compose_base=compose_base_command(),
+        cwd=ROOT,
+    )
+
+
+def bmad_command_prefix() -> list[str]:
+    return flow_tooling.bmad_command_prefix(
+        env_first=env_first,
+        workspace_executable_available=workspace_executable_available,
+    )
+
+
+def command_stack_doctor(_: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_doctor(
+        _,
+        detect_compose_context=detect_compose_context,
+        compose_control_file=compose_control_file,
+        compose_control_root=compose_control_root,
+        workspace_service=WORKSPACE_SERVICE,
+        project_name=PROJECT_NAME,
+    )
+
+
+def command_stack_ps(_: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_ps(_, run_compose=run_compose)
+
+
+def command_stack_up(args: argparse.Namespace) -> int:
+    connection = gateway_connection()
+    services = [WORKSPACE_SERVICE] if connection.get("mode") == "remote" else None
+    return flow_stack_ops.command_stack_up(
+        args,
+        ensure_devcontainer_env=ensure_devcontainer_env,
+        run_compose=run_compose,
+        services=services,
+    )
+
+
+def ensure_versioned_git_hooks() -> None:
+    hooks_path = ROOT / "scripts" / "git-hooks"
+    if not hooks_path.is_dir():
+        return
+
+    rc, _, _ = git_output(["git", "-C", str(ROOT), "rev-parse", "--is-inside-work-tree"])
+    if rc != 0:
+        return
+
+    desired = "scripts/git-hooks"
+    current_rc, current_stdout, _ = git_output(["git", "-C", str(ROOT), "config", "--local", "--get", "core.hooksPath"])
+    if current_rc == 0 and current_stdout.strip() == desired:
+        return
+
+    set_rc, _, set_stderr = git_output(["git", "-C", str(ROOT), "config", "--local", "core.hooksPath", desired])
+    if set_rc != 0:
+        warning = set_stderr.strip() or "git config failed"
+        print(f"Warning: no pude configurar core.hooksPath={desired}: {warning}")
+        return
+
+    print(f"Configured git hooks path: {desired}")
+
+
+def command_init(args: argparse.Namespace) -> int:
+    ensure_versioned_git_hooks()
+
+    if not args.skip_doctor:
+        doctor_rc = command_doctor(argparse.Namespace(json=False))
+        if doctor_rc != 0:
+            return doctor_rc
+
+    env_rc = ensure_devcontainer_env(force=bool(args.force_secrets_sync))
+    if env_rc != 0:
+        return env_rc
+
+    if args.skip_stack:
+        return 0
+
+    up_rc = command_stack_up(argparse.Namespace(build=bool(args.build)))
+    if up_rc != 0:
+        return up_rc
+
+    stack_doctor_rc = command_stack_doctor(argparse.Namespace())
+    if stack_doctor_rc != 0:
+        return stack_doctor_rc
+
+    ps_rc = command_stack_ps(argparse.Namespace())
+    if ps_rc != 0:
+        return ps_rc
+
+    workflow_doctor_rc = command_workflow_doctor(argparse.Namespace(json=False))
+    if workflow_doctor_rc != 0:
+        return workflow_doctor_rc
+
+    connection = gateway_connection()
+    if connection.get("mode") == "remote" and connection.get("base_url"):
+        print(f"Gateway remote target: {connection['base_url']}/healthz")
+    else:
+        print(f"Gateway host health: http://127.0.0.1:{gateway_host_port()}/healthz")
+    return 0
+
+
+def command_stack_down(args: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_down(args, run_compose=run_compose)
+
+
+def command_stack_build(args: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_build(args, run_compose=run_compose)
+
+
+def command_stack_logs(args: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_logs(args, run_compose=run_compose)
+
+
+def command_stack_sh(args: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_sh(
+        args,
+        run_compose=run_compose,
+        compose_exec_args=compose_exec_args,
+        workspace_service=WORKSPACE_SERVICE,
+        workspace_path=WORKSPACE_PATH,
+    )
+
+
+def command_stack_exec(args: argparse.Namespace) -> int:
+    return flow_stack_ops.command_stack_exec(
+        args,
+        normalize_passthrough=normalize_passthrough,
+        run_compose=run_compose,
+        compose_exec_args=compose_exec_args,
+        workspace_service=WORKSPACE_SERVICE,
+        workspace_path=WORKSPACE_PATH,
+    )
+
+
+def command_workspace_exec(args: argparse.Namespace) -> int:
+    return flow_tooling.command_workspace_exec(
+        args,
+        normalize_passthrough=normalize_passthrough,
+        running_inside_workspace=running_inside_workspace,
+        run_local_tool=run_local_tool,
+        run_workspace_tool=lambda tool_args: run_workspace_tool(tool_args, False, root_container_workdir()),
+    )
+
+
+def command_repo_exec(args: argparse.Namespace) -> int:
+    return flow_tooling.command_repo_exec(
+        args,
+        normalize_passthrough=normalize_passthrough,
+        repo_root=repo_root,
+        repo_compose_service=repo_compose_service,
+        workspace_service=WORKSPACE_SERVICE,
+        running_inside_workspace=running_inside_workspace,
+        runtime_path=runtime_path,
+        repo_container_workdir=repo_container_workdir,
+        run_local_tool_at_path=lambda tool_args, cwd: flow_tooling.run_local_tool_at_path(tool_args, cwd=cwd),
+        run_compose=run_compose,
+        compose_exec_args=compose_exec_args,
+    )
+
+
+def command_stack_design(args: argparse.Namespace) -> int:
+    return flow_stack_design.command_stack_design(
+        args,
+        root=ROOT,
+        stack_config_file=STACK_CONFIG_FILE,
+        root_repo=ROOT_REPO,
+        feature_specs=FEATURE_SPECS,
+        default_targets=DEFAULT_TARGETS,
+        resolve_spec=resolve_spec,
+        ensure_spec_ready_for_approval=ensure_spec_ready_for_approval,
+        resolve_runtime_pack=resolve_runtime_pack,
+        rel=rel,
+        utc_now=utc_now,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_stack_plan(args: argparse.Namespace) -> int:
+    return flow_stack_design.command_stack_plan(
+        args,
+        root=ROOT,
+        stack_config_file=STACK_CONFIG_FILE,
+        workspace_config_file=WORKSPACE_CONFIG_FILE,
+        load_workspace_config=load_workspace_config,
+        resolve_spec=resolve_spec,
+        ensure_spec_ready_for_approval=ensure_spec_ready_for_approval,
+        resolve_capability_pack=flow_stack_design.resolve_capability_pack,
+        resolve_runtime_pack=resolve_runtime_pack,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_stack_apply(args: argparse.Namespace) -> int:
+    return flow_stack_design.command_stack_apply(
+        args,
+        root=ROOT,
+        root_repo=ROOT_REPO,
+        stack_config_file=STACK_CONFIG_FILE,
+        workspace_config_file=WORKSPACE_CONFIG_FILE,
+        load_workspace_config=load_workspace_config,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        resolve_spec=resolve_spec,
+        ensure_spec_ready_for_approval=ensure_spec_ready_for_approval,
+        normalize_repo_path=normalize_repo_path,
+        validate_identifier=validate_identifier,
+        ensure_project_directory=lambda path, use_existing, rel=rel: flow_workspace_ops.ensure_project_directory(
+            path,
+            use_existing=use_existing,
+            rel=rel,
+        ),
+        repo_placeholder_text=repo_placeholder_text,
+        resolve_runtime_pack=resolve_runtime_pack,
+        add_service_to_compose=add_service_to_compose,
+        add_standalone_service_to_compose=add_standalone_service_to_compose,
+        find_repo_compose_file=flow_find_repo_compose_file,
+        resolve_capability_pack=flow_stack_design.resolve_capability_pack,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def run_local_tool(tool_args: list[str]) -> int:
+    return flow_tooling.run_local_tool(tool_args, root=ROOT)
+
+
+def command_tessl(args: argparse.Namespace) -> int:
+    return flow_tooling.command_tessl(
+        args,
+        normalize_passthrough=normalize_passthrough,
+        running_inside_workspace=running_inside_workspace,
+        run_local_tool=run_local_tool,
+        run_workspace_tool=run_workspace_tool,
+    )
+
+
+def command_bmad(args: argparse.Namespace) -> int:
+    return flow_tooling.command_bmad(
+        args,
+        bmad_command_prefix=bmad_command_prefix,
+        normalize_passthrough=normalize_passthrough,
+        running_inside_workspace=running_inside_workspace,
+        run_local_tool=run_local_tool,
+        run_workspace_tool=run_workspace_tool,
+    )
+
+
+def command_workflow_doctor(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_doctor(
+        args,
+        require_dirs=require_dirs,
+        workspace_config=WORKSPACE_CONFIG,
+        root=ROOT,
+        rel=rel,
+        capture_workspace_tool=capture_workspace_tool,
+        bmad_command_prefix=bmad_command_prefix,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        json_dumps=json_dumps,
+    )
+
+
+def command_workflow_intake(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_intake(
+        args,
+        require_dirs=require_dirs,
+        workspace_config=WORKSPACE_CONFIG,
+        root=ROOT,
+        root_repo=ROOT_REPO,
+        feature_specs=FEATURE_SPECS,
+        workflow_report_root=WORKFLOW_REPORT_ROOT,
+        state_path=state_path,
+        spec_create_callable=command_spec_create,
+        slugify=slugify,
+        rel=rel,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        capture_workspace_tool=capture_workspace_tool,
+        bmad_command_prefix=bmad_command_prefix,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_workflow_next_step(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_next_step(
+        args,
+        require_dirs=require_dirs,
+        workspace_config=WORKSPACE_CONFIG,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        analyze_spec=analyze_spec,
+        read_state=read_state,
+        plan_root=PLAN_ROOT,
+        workflow_report_root=WORKFLOW_REPORT_ROOT,
+        root=ROOT,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_workflow_close_feature(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_close_feature(
+        args,
+        require_dirs=require_dirs,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        analyze_spec=analyze_spec,
+        read_state=read_state,
+        write_state=write_state,
+        plan_root=PLAN_ROOT,
+        workflow_report_root=WORKFLOW_REPORT_ROOT,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_workflow_execute_feature(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_execute_feature(
+        args,
+        require_dirs=require_dirs,
+        workspace_config=WORKSPACE_CONFIG,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        analyze_spec=analyze_spec,
+        plan_root=PLAN_ROOT,
+        workflow_report_root=WORKFLOW_REPORT_ROOT,
+        plan_callable=command_plan,
+        slice_start_callable=command_slice_start,
+        root=ROOT,
+        rel=rel,
+        auto_worktree_cleanup=auto_cleanup_stale_worktrees,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_workflow_run(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_run(
+        args,
+        require_dirs=require_dirs,
+        workspace_config=WORKSPACE_CONFIG,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        read_state=read_state,
+        write_state=write_state,
+        command_plan=command_plan,
+        command_slice_start=command_slice_start,
+        command_ci_spec=command_ci_spec,
+        command_ci_repo=command_ci_repo,
+        command_ci_integration=command_ci_integration,
+        command_release_promote=command_release_promote,
+        command_release_verify=command_release_verify,
+        command_infra_apply=command_infra_apply,
+        command_workflow_execute_feature=command_workflow_execute_feature,
+        command_drift_check=command_drift_check,
+        command_contract_verify=command_contract_verify,
+        command_spec_generate_contracts=command_spec_generate_contracts,
+        plan_root=PLAN_ROOT,
+        workflow_report_root=WORKFLOW_REPORT_ROOT,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+        lock_backend_factory=lambda: flow_locks.SQLiteGlobalLockBackend(flow_locks.default_global_lock_db_path(ROOT), utc_now_fn=utc_now),
+        policy_check_callable=lambda **kwargs: flow_policy.policy_check_payload(rel=rel, **kwargs),
+    )
+
+
+def command_workflow_pause(args: argparse.Namespace) -> int:
+    return flow_workflows.command_workflow_pause(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        read_state=read_state,
+        write_state=write_state,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_workflow_resume(args: argparse.Namespace) -> int:
+    setattr(args, "resume_from_stage", getattr(args, "stage", None))
+    return command_workflow_run(args)
+
+
+def command_workflow_retry(args: argparse.Namespace) -> int:
+    setattr(args, "retry_stage", getattr(args, "stage", None))
+    return command_workflow_run(args)
+
+
+def command_ops_metrics(args: argparse.Namespace) -> int:
+    OPERATIONS_REPORT_ROOT.mkdir(parents=True, exist_ok=True)
+    payload = flow_collect_workflow_metrics(root=ROOT, utc_now=utc_now)
+    payload = dict(payload)
+    gw_db = ROOT / "gateway" / "data" / "tasks.db"
+    payload["gateway_tasks"] = flow_collect_gateway_sqlite_task_metrics(db_path=gw_db)
+    json_path = OPERATIONS_REPORT_ROOT / "metrics.json"
+    json_path.write_text(json_dumps(payload) + "\n", encoding="utf-8")
+    if wants_json(args):
+        print(json_dumps(payload))
+    else:
+        print(rel(json_path))
+    return 0
+
+
+def command_ops_dashboard(args: argparse.Namespace) -> int:
+    OPERATIONS_REPORT_ROOT.mkdir(parents=True, exist_ok=True)
+    payload = flow_collect_runs_dashboard_filtered(
+        root=ROOT,
+        utc_now=utc_now,
+        spec=str(getattr(args, "spec", "") or ""),
+        repo=str(getattr(args, "repo", "") or ""),
+        actor=str(getattr(args, "actor", "") or ""),
+        status=str(getattr(args, "status", "") or ""),
+    )
+    json_path = OPERATIONS_REPORT_ROOT / "runs-dashboard.json"
+    json_path.write_text(json_dumps(payload) + "\n", encoding="utf-8")
+    if wants_json(args):
+        print(json_dumps(payload))
+    else:
+        print(rel(json_path))
+    return 0
+
+
+def command_ops_sla(args: argparse.Namespace) -> int:
+    OPERATIONS_REPORT_ROOT.mkdir(parents=True, exist_ok=True)
+    # Thresholds pueden provenir de workspace.config.json en el futuro; por ahora
+    # usamos valores por defecto razonables y dejamos la estructura lista.
+    thresholds: dict[str, float] = {
+        # valores ejemplo en segundos; pueden ajustarse luego via config.
+        "ci_spec": 600.0,
+        "ci_repo": 1200.0,
+        "ci_integration": 1800.0,
+    }
+    payload = flow_evaluate_sla_alerts(root=ROOT, utc_now=utc_now, thresholds=thresholds)
+    payload = dict(payload)
+    gw_db = ROOT / "gateway" / "data" / "tasks.db"
+    payload["gateway_processing"] = flow_evaluate_gateway_task_processing_sla(db_path=gw_db, utc_now=utc_now)
+    json_path = OPERATIONS_REPORT_ROOT / "sla-alerts.json"
+    json_path.write_text(json_dumps(payload) + "\n", encoding="utf-8")
+    if wants_json(args):
+        print(json_dumps(payload))
+    else:
+        print(rel(json_path))
+    return 0
+
+
+def command_ops_decision_add(args: argparse.Namespace) -> int:
+    OPERATIONS_REPORT_ROOT.mkdir(parents=True, exist_ok=True)
+    entry = flow_append_decision(
+        root=ROOT,
+        actor_type=str(args.actor_type),
+        actor=str(args.actor),
+        decision=str(args.decision),
+        context=str(args.context),
+        impact_or_risk=str(args.impact_or_risk),
+        utc_now=utc_now,
+    )
+    if wants_json(args):
+        print(json_dumps(entry))
+    else:
+        print(json.dumps(entry, ensure_ascii=True))
+    return 0
+
+
+def command_ops_decision_list(args: argparse.Namespace) -> int:
+    entries = flow_read_decisions(root=ROOT, max_items=int(getattr(args, "limit", 100) or 100))
+    payload = {"generated_at": utc_now(), "items": entries}
+    if wants_json(args):
+        print(json_dumps(payload))
+    else:
+        print(json.dumps(payload, ensure_ascii=True))
+    return 0
+
+
+def command_ops_serve_metrics(args: argparse.Namespace) -> int:
+    raise SystemExit("`flow ops serve-metrics` ha sido deprecado. Usa el endpoint `/metrics` del gateway SoftOS.")
+
+
+def serialize_skill_entry(entry: dict[str, object]) -> dict[str, object]:
+    return flow_serialize_skill_entry(entry, rel)
+
+
+def command_skills_doctor(args: argparse.Namespace) -> int:
+    if not running_inside_workspace() and os.environ.get("FLOW_DELEGATED_TO_WORKSPACE") != "1":
+        context = detect_compose_context()
+        if context["active"]:
+            delegated_command = [
+                "env",
+                "FLOW_DELEGATED_TO_WORKSPACE=1",
+                f"FLOW_HOST_ROOT={workspace_host_root().resolve()}",
+                "python3",
+                "./flow",
+                "skills",
+                "doctor",
+            ]
+            if bool(getattr(args, "json", False)):
+                delegated_command.append("--json")
+            return run_workspace_tool(delegated_command, False, root_container_workdir())
+
+    return flow_skills_ops.command_skills_doctor(
+        args,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        normalize_skill_provider=normalize_skill_provider,
+        workspace_executable_available=workspace_executable_available,
+        rel=rel,
+        skills_config_file=SKILLS_CONFIG_FILE,
+        json_dumps=json_dumps,
+    )
+
+
+def command_skills_list(args: argparse.Namespace) -> int:
+    return flow_skills_ops.command_skills_list(
+        args,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        serialize_skill_entry=serialize_skill_entry,
+        json_dumps=json_dumps,
+    )
+
+
+def command_skills_context(args: argparse.Namespace) -> int:
+    return flow_skills_ops.command_skills_context(
+        args,
+        root=ROOT,
+        load_workspace_config=load_workspace_config,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        resolve_runtime_pack=resolve_runtime_pack,
+        resolve_spec=resolve_spec,
+        analyze_spec=analyze_spec,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_skills_discover(args: argparse.Namespace) -> int:
+    return flow_skills_ops.command_skills_discover(
+        args,
+        json_dumps=json_dumps,
+    )
+
+
+def command_skills_autoskills(args: argparse.Namespace) -> int:
+    return flow_skills_ops.command_skills_autoskills(
+        args,
+        root=ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def command_skills_add(args: argparse.Namespace) -> int:
+    return flow_skills_ops.command_skills_add(
+        args,
+        load_skills_config=load_skills_config,
+        write_skills_config=write_skills_config,
+        normalize_skill_provider=normalize_skill_provider,
+        normalize_skill_entry=normalize_skill_entry,
+        skills_config_file=SKILLS_CONFIG_FILE,
+    )
+
+
+def command_skills_sync(args: argparse.Namespace) -> int:
+    if not running_inside_workspace() and os.environ.get("FLOW_DELEGATED_TO_WORKSPACE") != "1":
+        context = detect_compose_context()
+        if context["active"]:
+            delegated_command = [
+                "env",
+                "FLOW_DELEGATED_TO_WORKSPACE=1",
+                f"FLOW_HOST_ROOT={workspace_host_root().resolve()}",
+                "python3",
+                "./flow",
+                "skills",
+                "sync",
+            ]
+            if args.provider:
+                delegated_command.extend(["--provider", str(args.provider)])
+            for name in args.name or []:
+                delegated_command.extend(["--name", str(name)])
+            if bool(args.dry_run):
+                delegated_command.append("--dry-run")
+            if bool(getattr(args, "json", False)):
+                delegated_command.append("--json")
+            return run_workspace_tool(delegated_command, False, root_container_workdir())
+
+    return flow_skills_ops.command_skills_sync(
+        args,
+        require_dirs=require_dirs,
+        load_skills_config=load_skills_config,
+        skills_entries=skills_entries,
+        normalize_skill_provider=normalize_skill_provider,
+        rel=rel,
+        capture_workspace_tool=capture_workspace_tool,
+        utc_now=utc_now,
+        write_json=write_json,
+        skills_report_root=SKILLS_REPORT_ROOT,
+        format_findings=format_findings,
+        workspace_executable_available=workspace_executable_available,
+    )
+
+
+def _update_runtime_skill_refs(runtime: str, skill_name: str) -> None:
+    """
+    Actualiza el runtime pack JSON correspondiente para incluir `skill_name`
+    en `agent_skill_refs`, si aun no esta presente.
+    """
+    manifest_path = ROOT / "workspace.runtimes.json"
+    try:
+        manifest = load_json_object(manifest_path, "runtimes")
+    except SystemExit:
+        return
+
+    runtimes = manifest.get("runtimes", {})
+    if not isinstance(runtimes, dict) or runtime not in runtimes:
+        return
+
+    entry = runtimes[runtime]
+    if not isinstance(entry, dict):
+        return
+
+    source = str(entry.get("source", "")).strip()
+    if not source:
+        return
+
+    pack_path = (ROOT / source).resolve()
+    try:
+        pack_payload = json.loads(pack_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    if not isinstance(pack_payload, dict):
+        return
+
+    agent_refs = pack_payload.get("agent_skill_refs")
+    if not isinstance(agent_refs, list):
+        agent_refs = []
+    if skill_name not in agent_refs:
+        agent_refs.append(skill_name)
+    pack_payload["agent_skill_refs"] = agent_refs
+    pack_path.write_text(json.dumps(pack_payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+
+def command_skills_install(args: argparse.Namespace) -> int:
+    """
+    Wrapper de alto nivel:
+    - delega el registro del skill a `skills_ops.command_skills_install`.
+    - si `--runtime` viene informado, actualiza el runtime pack para referenciar el skill.
+    """
+    exit_code = flow_skills_ops.command_skills_install(
+        args,
+        load_skills_config=load_skills_config,
+        write_skills_config=write_skills_config,
+        normalize_skill_provider=normalize_skill_provider,
+        normalize_skill_entry=normalize_skill_entry,
+        skills_config_file=SKILLS_CONFIG_FILE,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    runtime = getattr(args, "runtime", None)
+    name = str(getattr(args, "name", "") or "").strip() or str(args.identifier).strip()
+    if runtime:
+        _update_runtime_skill_refs(str(runtime), name)
+    return 0
+
+
+def command_providers_doctor(args: argparse.Namespace) -> int:
+    return flow_command_providers_doctor(
+        args,
+        load_providers_config=load_providers_config,
+        provider_categories=provider_categories,
+        provider_default=provider_default,
+        provider_entries=provider_entries,
+        provider_entrypoint_path=provider_entrypoint_path,
+        provider_requires=provider_requires,
+        provider_missing_runtime=provider_missing_runtime,
+        provider_enabled=provider_enabled,
+        providers_config_file=PROVIDERS_CONFIG_FILE,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_providers_list(args: argparse.Namespace) -> int:
+    return flow_command_providers_list(
+        args,
+        load_providers_config=load_providers_config,
+        provider_categories=provider_categories,
+        provider_section=provider_section,
+        provider_entries=provider_entries,
+        provider_enabled=provider_enabled,
+        provider_entrypoint_path=lambda config: rel(provider_entrypoint_path(config)),
+        provider_requires=provider_requires,
+        provider_default=provider_default,
+    )
+
+
+def command_submodule_doctor(args: argparse.Namespace) -> int:
+    return flow_command_submodule_doctor(
+        args,
+        repo_names=REPO_NAMES,
+        repo_strategy=repo_strategy,
+        root=ROOT,
+        git_output=git_output,
+        repo_config=repo_config,
+        repo_root=repo_root,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_submodule_sync(args: argparse.Namespace) -> int:
+    return flow_command_submodule_sync(
+        args,
+        repo_names=REPO_NAMES,
+        repo_strategy=repo_strategy,
+        root=ROOT,
+        capture_command=capture_command,
+        repo_config=repo_config,
+        repo_root=repo_root,
+        git_output=git_output,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_worktree_create(args: argparse.Namespace) -> int:
+    return flow_command_worktree_create(
+        args,
+        repo_names=REPO_NAMES,
+        repo_strategy=repo_strategy,
+        root=ROOT,
+        worktree_root=WORKTREE_ROOT,
+        repo_config=repo_config,
+        capture_command=capture_command,
+        git_output=git_output,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_worktree_list(args: argparse.Namespace) -> int:
+    return flow_command_worktree_list(
+        args,
+        repo_names=REPO_NAMES,
+        root_repo=ROOT_REPO,
+        worktree_root=WORKTREE_ROOT,
+        plan_root=PLAN_ROOT,
+        state_root=STATE_ROOT,
+        capture_command=capture_command,
+        json_dumps=json_dumps,
+    )
+
+
+def command_worktree_clean(args: argparse.Namespace) -> int:
+    return flow_command_worktree_clean(
+        args,
+        repo_names=REPO_NAMES,
+        root_repo=ROOT_REPO,
+        root=ROOT,
+        worktree_root=WORKTREE_ROOT,
+        plan_root=PLAN_ROOT,
+        state_root=STATE_ROOT,
+        repo_root=repo_root,
+        capture_command=capture_command,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def auto_cleanup_stale_worktrees() -> dict[str, object]:
+    return flow_auto_cleanup_stale_worktrees(
+        repo_names=REPO_NAMES,
+        root_repo=ROOT_REPO,
+        root=ROOT,
+        worktree_root=WORKTREE_ROOT,
+        plan_root=PLAN_ROOT,
+        state_root=STATE_ROOT,
+        repo_root=repo_root,
+        capture_command=capture_command,
+        utc_now=utc_now,
+    )
+
+
+def command_secrets_doctor(args: argparse.Namespace) -> int:
+    return flow_command_secrets_doctor(
+        args,
+        load_secrets_config=load_secrets_config,
+        secrets_provider_entries=secrets_provider_entries,
+        secrets_target_entries=secrets_target_entries,
+        secrets_default_provider=secrets_default_provider,
+        secrets_provider_entrypoint=secrets_provider_entrypoint,
+        secrets_provider_requires=secrets_provider_requires,
+        secrets_provider_enabled=secrets_provider_enabled,
+        secrets_target_path=secrets_target_path,
+        secrets_target_format=secrets_target_format,
+        secrets_target_provider=secrets_target_provider,
+        secrets_target_items=secrets_target_items,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+        shutil_which=shutil.which,
+        secrets_config_file=SECRETS_CONFIG_FILE,
+    )
+
+
+def command_secrets_list(args: argparse.Namespace) -> int:
+    return flow_command_secrets_list(
+        args,
+        load_secrets_config=load_secrets_config,
+        secrets_target_entries=secrets_target_entries,
+        secrets_target_path=secrets_target_path,
+        secrets_target_format=secrets_target_format,
+        secrets_target_provider=secrets_target_provider,
+        secrets_target_items=secrets_target_items,
+        secrets_default_provider=secrets_default_provider,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def resolve_secret_targets(payload: dict[str, object], names: list[str]) -> list[tuple[str, dict[str, object]]]:
+    return flow_resolve_secret_targets(payload, names, secrets_target_entries)
+
+
+def render_secret_target(target_format: str, values: dict[str, str]) -> str:
+    return flow_render_secret_target(target_format, values)
+
+
+def tracked_repo_files(repo_path: Path) -> tuple[list[str], Optional[str]]:
+    return flow_tracked_repo_files(repo_path, git_output)
+
+
+def staged_repo_files(repo_path: Path) -> tuple[list[str], Optional[str]]:
+    return flow_staged_repo_files(repo_path, git_output)
+
+
+def scan_secret_paths(repo: str, repo_path: Path, relative_paths: list[str]) -> list[dict[str, object]]:
+    return flow_scan_secret_paths(repo, repo_path, relative_paths, read_text=file_text)
+
+
+def command_secrets_sync(args: argparse.Namespace) -> int:
+    return flow_command_secrets_sync(
+        args,
+        load_secrets_config=load_secrets_config,
+        secrets_target_entries=secrets_target_entries,
+        secrets_target_provider=secrets_target_provider,
+        secrets_provider_config=secrets_provider_config,
+        secrets_provider_enabled=secrets_provider_enabled,
+        secrets_target_items=secrets_target_items,
+        resolve_secret_value=resolve_secret_value,
+        secrets_target_path=secrets_target_path,
+        secrets_target_format=secrets_target_format,
+        render_secret_target_fn=render_secret_target,
+        rel=rel,
+        utc_now=utc_now,
+        write_json=write_json,
+        secrets_report_root=SECRETS_REPORT_ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def command_secrets_exec(args: argparse.Namespace) -> int:
+    return flow_command_secrets_exec(
+        args,
+        normalize_passthrough=normalize_passthrough,
+        load_secrets_config=load_secrets_config,
+        secrets_target_entries=secrets_target_entries,
+        secrets_target_provider=secrets_target_provider,
+        secrets_provider_config=secrets_provider_config,
+        secrets_provider_enabled=secrets_provider_enabled,
+        secrets_target_items=secrets_target_items,
+        resolve_secret_value=resolve_secret_value,
+        root=ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def command_secrets_scan(args: argparse.Namespace) -> int:
+    return flow_command_secrets_scan(
+        args,
+        require_dirs=require_dirs,
+        repo_names=REPO_NAMES,
+        root_repo=ROOT_REPO,
+        repo_root=repo_root,
+        staged_repo_files_fn=staged_repo_files,
+        tracked_repo_files_fn=tracked_repo_files,
+        git_changed_files=git_changed_files,
+        scan_secret_paths_fn=scan_secret_paths,
+        utc_now=utc_now,
+        write_json=write_json,
+        secret_scan_report_root=SECRET_SCAN_REPORT_ROOT,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_drift_check(args: argparse.Namespace) -> int:
+    return flow_command_drift_check(
+        args,
+        require_dirs=require_dirs,
+        select_spec_paths=select_spec_paths,
+        root=ROOT,
+        root_repo=ROOT_REPO,
+        implementation_repos=implementation_repos,
+        repo_root=repo_root,
+        analyze_spec=analyze_spec,
+        test_reference_findings=test_reference_findings,
+        git_diff_name_only=git_diff_name_only,
+        repo_paths_changed_under_roots=repo_paths_changed_under_roots,
+        matches_any_pattern=matches_any_pattern,
+        extract_contract_declarations=extract_contract_declarations,
+        validate_contract_declaration=validate_contract_declaration,
+        contract_match_files=contract_match_files,
+        rel=rel,
+        utc_now=utc_now,
+        slugify=slugify,
+        write_json=write_json,
+        drift_report_root=DRIFT_REPORT_ROOT,
+        json_dumps=json_dumps,
+        wants_json=wants_json,
+    )
+
+
+def render_contract_artifacts(slug: str, declarations: list[dict[str, object]]) -> list[dict[str, object]]:
+    return flow_render_contract_artifacts(
+        slug,
+        declarations,
+        generated_contract_root=GENERATED_CONTRACT_ROOT,
+        utc_now=utc_now,
+        rel=rel,
+        write_json=write_json,
+        contracts_render_artifacts=contracts_render_artifacts,
+    )
+
+
+def verify_contract_declaration(declaration: dict[str, object], matched_files: list[Path]) -> list[str]:
+    return flow_verify_contract_declaration(
+        declaration,
+        matched_files,
+        file_text=file_text,
+        contracts_verify_declaration=contracts_verify_declaration,
+    )
+
+
+def command_contract_verify(args: argparse.Namespace) -> int:
+    return flow_command_contract_verify(
+        args,
+        require_dirs=require_dirs,
+        select_spec_paths=select_spec_paths,
+        spec_slug=spec_slug,
+        extract_contract_declarations=extract_contract_declarations,
+        validate_contract_declaration=validate_contract_declaration,
+        contract_match_files=contract_match_files,
+        render_contract_artifacts=render_contract_artifacts,
+        verify_contract_declaration=verify_contract_declaration,
+        rel=rel,
+        utc_now=utc_now,
+        slugify=slugify,
+        write_json=write_json,
+        contract_report_root=CONTRACT_REPORT_ROOT,
+        json_dumps=json_dumps,
+        wants_json=wants_json,
+        root=ROOT,
+    )
+
+
+def command_spec_generate_contracts(args: argparse.Namespace) -> int:
+    return flow_command_spec_generate_contracts(
+        args,
+        require_dirs=require_dirs,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        extract_contract_declarations=extract_contract_declarations,
+        validate_contract_declaration=validate_contract_declaration,
+        render_contract_artifacts=render_contract_artifacts,
+        rel=rel,
+        json_dumps=json_dumps,
+        wants_json=wants_json,
+    )
+
+
+def resolve_spec(identifier: str) -> Path:
+    return flow_specs.resolve_spec(identifier, config=SPEC_CONFIG, slugify=slugify)
+
+
+def spec_slug(spec_path: Path) -> str:
+    return flow_specs.spec_slug(spec_path)
+
+
+def render_targets(repos: list[str]) -> str:
+    return flow_specs.render_targets(SPEC_CONFIG, repos)
+
+
+def command_doctor(args: argparse.Namespace) -> int:
+    return flow_command_doctor(
+        args,
+        detect_compose_context=detect_compose_context,
+        bmad_command_prefix=bmad_command_prefix,
+        runtimes_config_file=RUNTIMES_CONFIG_FILE,
+        capabilities_config_file=CAPABILITIES_CONFIG_FILE,
+        available_runtime_names=available_runtime_names,
+        runtime_catalog_error_type=RuntimeCatalogError,
+        root=ROOT,
+        workspace_config_file=WORKSPACE_CONFIG_FILE,
+        stack_config_file=STACK_CONFIG_FILE,
+        skills_config_file=SKILLS_CONFIG_FILE,
+        providers_config_file=PROVIDERS_CONFIG_FILE,
+        secrets_config_file=SECRETS_CONFIG_FILE,
+        specs_root=SPECS_ROOT,
+        flow_root=FLOW_ROOT,
+        repo_names=REPO_NAMES,
+        repo_root=repo_root,
+        slugify=slugify,
+        worktree_root=WORKTREE_ROOT,
+        workspace_path=WORKSPACE_PATH,
+        compose_control_root=compose_control_root,
+        running_inside_workspace=running_inside_workspace,
+        shutil_which=shutil.which,
+        project_name=PROJECT_NAME,
+        json_dumps=json_dumps,
+    )
+
+
+def command_spec_create(args: argparse.Namespace) -> int:
+    return flow_features.command_spec_create(
+        args,
+        require_dirs=require_dirs,
+        slugify=slugify,
+        implementation_repos=implementation_repos,
+        root_repo=ROOT_REPO,
+        feature_specs=FEATURE_SPECS,
+        default_targets=DEFAULT_TARGETS,
+        render_targets=render_targets,
+        render_test_plan_hints=render_test_plan_hints,
+        rel=rel,
+        state_path=state_path,
+        utc_now=utc_now,
+        write_state=write_state,
+    )
+
+
+def command_spec_review(args: argparse.Namespace) -> int:
+    return flow_features.command_spec_review(
+        args,
+        require_dirs=require_dirs,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        analyze_spec=analyze_spec,
+        repos_missing_test_refs=repos_missing_test_refs,
+        spec_dependency_findings=spec_dependency_findings,
+        format_findings=format_findings,
+        report_root=REPORT_ROOT,
+        read_state=read_state,
+        write_state=write_state,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_spec_guard(args: argparse.Namespace) -> int:
+    return flow_command_spec_guard(
+        args,
+        require_dirs=require_dirs,
+        select_spec_paths=select_spec_paths,
+        root=ROOT,
+        root_repo=ROOT_REPO,
+        implementation_repos=implementation_repos,
+        repo_root=repo_root,
+        analyze_spec=analyze_spec,
+        git_diff_name_only=git_diff_name_only,
+        staged_repo_files_fn=lambda repo_path: flow_staged_repo_files(repo_path, git_output),
+        repo_paths_changed_under_roots=repo_paths_changed_under_roots,
+        matches_any_pattern=matches_any_pattern,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_spec_approve(args: argparse.Namespace) -> int:
+    return flow_features.command_spec_approve(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        ensure_spec_ready_for_approval=ensure_spec_ready_for_approval,
+        replace_frontmatter_status=replace_frontmatter_status,
+        read_state=read_state,
+        write_state=write_state,
+        rel=rel,
+        utc_now=utc_now,
+    )
+
+
+def command_spec_approval_status(args: argparse.Namespace) -> int:
+    return flow_features.command_spec_approval_status(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        read_state=read_state,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_plan(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    slug = spec_slug(spec_path)
+    if flow_memory_ops.memory_execution_enabled(
+        args,
+        workspace_config=WORKSPACE_CONFIG,
+        arg_name="memory_recall",
+        config_name="recall_before_plan",
+    ):
+        flow_memory_ops.write_plan_recall_report(
+            root=ROOT,
+            workspace_config=WORKSPACE_CONFIG,
+            slug=slug,
+            spec_path=spec_path,
+            json_dumps=json_dumps,
+        )
+
+    def _callback() -> int:
+        return flow_features.command_plan(
+            args,
+            require_dirs=require_dirs,
+            resolve_spec=resolve_spec,
+            spec_slug=spec_slug,
+            analyze_spec=analyze_spec,
+            require_routed_paths=require_routed_paths,
+            repo_slice_prefix=repo_slice_prefix,
+            repo_root=repo_root,
+            worktree_root=WORKTREE_ROOT,
+            plan_root=PLAN_ROOT,
+            read_state=read_state,
+            write_state=write_state,
+            ensure_remote_claim_for_plan=lambda claim_slug: flow_gateway_ops.ensure_remote_claim_for_plan(
+                root=ROOT,
+                slug=claim_slug,
+                read_state=read_state,
+                workspace_config=WORKSPACE_CONFIG,
+            ),
+            rel=rel,
+            utc_now=utc_now,
+        )
+
+    rc = flow_gateway_ops.run_with_remote_claim_heartbeat(
+        root=ROOT,
+        slug=slug,
+        read_state=read_state,
+        workspace_config=WORKSPACE_CONFIG,
+        callback=_callback,
+        reason="auto-heartbeat-plan",
+    )
+    if rc == 0:
+        flow_gateway_ops.maybe_publish_transition_hook(
+            root=ROOT,
+            slug=slug,
+            read_state=read_state,
+            workspace_config=WORKSPACE_CONFIG,
+            to_state="triaged",
+            reason="hook-plan-succeeded",
+        )
+    return rc
+
+
+def command_plan_approve(args: argparse.Namespace) -> int:
+    return flow_features.command_plan_approve(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        plan_root=PLAN_ROOT,
+        read_state=read_state,
+        write_state=write_state,
+        rel=rel,
+        utc_now=utc_now,
+    )
+
+
+def command_plan_approval_status(args: argparse.Namespace) -> int:
+    return flow_features.command_plan_approval_status(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        plan_root=PLAN_ROOT,
+        read_state=read_state,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_policy_check(args: argparse.Namespace) -> int:
+    return flow_policy.command_policy_check(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        plan_root=PLAN_ROOT,
+        read_state=read_state,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_list(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_list(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_status(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_status(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_pick(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_pick(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_poll(args: argparse.Namespace) -> int:
+    def _auto_plan_callback(spec_id: str) -> int:
+        return command_plan(argparse.Namespace(spec=spec_id))
+
+    return flow_gateway_ops.command_gateway_poll(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+        auto_plan_callback=_auto_plan_callback,
+    )
+
+
+def command_gateway_watch(args: argparse.Namespace) -> int:
+    def _auto_plan_callback(spec_id: str) -> int:
+        return command_plan(argparse.Namespace(spec=spec_id))
+
+    return flow_gateway_ops.command_gateway_watch(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+        auto_plan_callback=_auto_plan_callback,
+    )
+
+
+def command_gateway_claim(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_claim(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_fetch_spec(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_fetch_spec(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_heartbeat(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_heartbeat(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_transition(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_transition(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_release(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_release(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_gateway_reassign(args: argparse.Namespace) -> int:
+    return flow_gateway_ops.command_gateway_reassign(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        read_state=read_state,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_slice_start(args: argparse.Namespace) -> int:
+    slug = slugify(args.spec)
+    flow_gateway_ops.ensure_remote_claim_for_execution(
+        root=ROOT,
+        slug=slug,
+        read_state=read_state,
+        workspace_config=WORKSPACE_CONFIG,
+    )
+
+    def _callback() -> int:
+        return flow_features.command_slice_start(
+            args,
+            slugify=slugify,
+            load_plan_and_slice=lambda selected_slug, slice_name: flow_features.load_plan_and_slice(
+                selected_slug,
+                slice_name,
+                plan_root=PLAN_ROOT,
+                rel=rel,
+            ),
+            worktree_root=WORKTREE_ROOT,
+            report_root=REPORT_ROOT,
+            read_state=read_state,
+            write_state=write_state,
+            rel=rel,
+            policy_check=lambda **kwargs: flow_policy.policy_check_payload(rel=rel, **kwargs),
+        )
+
+    rc = flow_gateway_ops.run_with_remote_claim_heartbeat(
+        root=ROOT,
+        slug=slug,
+        read_state=read_state,
+        workspace_config=WORKSPACE_CONFIG,
+        callback=_callback,
+        reason="auto-heartbeat-slice-start",
+    )
+    if rc == 0:
+        flow_gateway_ops.maybe_publish_transition_hook(
+            root=ROOT,
+            slug=slug,
+            read_state=read_state,
+            workspace_config=WORKSPACE_CONFIG,
+            to_state="in_edit",
+            reason="hook-slice-start-succeeded",
+        )
+    return rc
+
+
+def command_slice_verify(args: argparse.Namespace) -> int:
+    slug = slugify(args.spec)
+    flow_gateway_ops.ensure_remote_claim_for_execution(
+        root=ROOT,
+        slug=slug,
+        read_state=read_state,
+        workspace_config=WORKSPACE_CONFIG,
+    )
+
+    def _callback() -> int:
+        return flow_features.command_slice_verify(
+            args,
+            slugify=slugify,
+            load_plan_and_slice=lambda selected_slug, slice_name: flow_features.load_plan_and_slice(
+                selected_slug,
+                slice_name,
+                plan_root=PLAN_ROOT,
+                rel=rel,
+            ),
+            root=ROOT,
+            analyze_spec=analyze_spec,
+            root_repo=ROOT_REPO,
+            classify_routed_path=classify_routed_path,
+            validate_test_reference_patterns=validate_test_reference_patterns,
+            git_changed_files=git_changed_files,
+            detect_test_command=detect_test_command,
+            format_findings=format_findings,
+            report_root=REPORT_ROOT,
+            plan_root=PLAN_ROOT,
+            read_state=read_state,
+            write_state=write_state,
+            running_inside_workspace=running_inside_workspace,
+            repo_compose_service=repo_compose_service,
+            run_workspace_tool=run_workspace_tool,
+            workspace_flow_workdir=root_container_workdir,
+            runtime_path=runtime_path,
+            host_root_hint=lambda: str(workspace_host_root().resolve()),
+            rel=rel,
+            utc_now=utc_now,
+        )
+
+    rc = flow_gateway_ops.run_with_remote_claim_heartbeat(
+        root=ROOT,
+        slug=slug,
+        read_state=read_state,
+        workspace_config=WORKSPACE_CONFIG,
+        callback=_callback,
+        reason="auto-heartbeat-slice-verify",
+    )
+    if rc == 0:
+        flow_gateway_ops.maybe_publish_transition_hook(
+            root=ROOT,
+            slug=slug,
+            read_state=read_state,
+            workspace_config=WORKSPACE_CONFIG,
+            to_state="in_review",
+            reason="hook-slice-verify-succeeded",
+        )
+    return rc
+
+
+def command_status(args: argparse.Namespace) -> int:
+    return flow_features.command_status(
+        args,
+        slugify=slugify,
+        state_root=STATE_ROOT,
+        read_state=read_state,
+        json_dumps=json_dumps,
+        workspace_root=ROOT,
+    )
+
+
+def command_evidence_status(args: argparse.Namespace) -> int:
+    return flow_evidence.command_evidence_status(
+        args,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        plan_root=PLAN_ROOT,
+        report_root=REPORT_ROOT,
+        read_state=read_state,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_evidence_bundle(args: argparse.Namespace) -> int:
+    return flow_evidence.command_evidence_bundle(
+        args,
+        root=ROOT,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        plan_root=PLAN_ROOT,
+        report_root=REPORT_ROOT,
+        evidence_report_root=EVIDENCE_REPORT_ROOT,
+        read_state=read_state,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_agent_handoff(args: argparse.Namespace) -> int:
+    return flow_agent_handoff.command_agent_handoff(
+        args,
+        root=ROOT,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        plan_root=PLAN_ROOT,
+        report_root=REPORT_ROOT,
+        evidence_report_root=EVIDENCE_REPORT_ROOT,
+        handoff_report_root=AGENT_HANDOFF_REPORT_ROOT,
+        read_state=read_state,
+        rel=rel,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_ci_spec(args: argparse.Namespace) -> int:
+    return flow_command_ci_spec(
+        args,
+        require_dirs=require_dirs,
+        select_spec_paths=select_spec_paths,
+        analyze_spec=analyze_spec,
+        test_reference_findings=test_reference_findings,
+        repos_missing_test_refs=repos_missing_test_refs,
+        spec_dependency_findings=spec_dependency_findings,
+        rel=rel,
+        format_findings=format_findings,
+        slugify=slugify,
+        write_json=write_json,
+        ci_report_root=CI_REPORT_ROOT,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+
+
+def command_ci_repo(args: argparse.Namespace) -> int:
+    return flow_command_ci_repo(
+        args,
+        require_dirs=require_dirs,
+        implementation_repos=implementation_repos,
+        resolve_spec=resolve_spec,
+        analyze_spec=analyze_spec,
+        repo_root=repo_root,
+        repo_config=repo_config,
+        repo_ci_commands=repo_ci_commands,
+        git_diff_name_only=git_diff_name_only,
+        git_changed_files=git_changed_files,
+        tracked_repo_files=tracked_repo_files,
+        scan_secret_paths=scan_secret_paths,
+        capture_command=capture_command,
+        write_json=write_json,
+        plan_root=PLAN_ROOT,
+        ci_report_root=CI_REPORT_ROOT,
+        slugify=slugify,
+        rel=rel,
+        format_findings=format_findings,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+        running_inside_workspace=running_inside_workspace,
+        repo_compose_service=repo_compose_service,
+        run_workspace_tool=run_workspace_tool,
+        workspace_flow_workdir=root_container_workdir,
+        runtime_path=runtime_path,
+        host_root_hint=lambda: str(workspace_host_root().resolve()),
+    )
+
+
+def command_ci_integration(args: argparse.Namespace) -> int:
+    return flow_command_ci_integration(
+        args,
+        require_dirs=require_dirs,
+        ensure_devcontainer_env=ensure_devcontainer_env,
+        capture_compose=capture_compose,
+        detect_compose_context=detect_compose_context,
+        run_compose=run_compose,
+        implementation_repos=implementation_repos,
+        repo_config=repo_config,
+        repo_compose_service=repo_compose_service,
+        compose_exec_args=compose_exec_args,
+        workspace_service=WORKSPACE_SERVICE,
+        rel=rel,
+        format_findings=format_findings,
+        slugify=slugify,
+        utc_now=utc_now,
+        ci_report_root=CI_REPORT_ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def command_release_cut(args: argparse.Namespace) -> int:
+    return flow_command_release_cut(
+        args,
+        require_dirs=require_dirs,
+        release_default_version=release_default_version,
+        release_manifest_path=release_manifest_path,
+        resolve_spec=resolve_spec,
+        releasable_feature_specs=releasable_feature_specs,
+        ensure_spec_ready_for_approval=ensure_spec_ready_for_approval,
+        rel=rel,
+        spec_slug=spec_slug,
+        read_state=read_state,
+        root=ROOT,
+        root_repo=ROOT_REPO,
+        workspace_config=WORKSPACE_CONFIG,
+        plan_root=PLAN_ROOT,
+        git_changed_files=git_changed_files,
+        repo_head_sha=repo_head_sha,
+        repo_root=repo_root,
+        release_manifest_root=RELEASE_MANIFEST_ROOT,
+        utc_now=utc_now,
+        write_json=write_json,
+        write_state=write_state,
+        json_dumps=json_dumps,
+    )
+
+
+def command_release_manifest(args: argparse.Namespace) -> int:
+    return flow_command_release_manifest(
+        args,
+        load_release_manifest=load_release_manifest,
+        release_manifest_path=release_manifest_path,
+        rel=rel,
+        json_dumps=json_dumps,
+    )
+
+
+def command_release_status(args: argparse.Namespace) -> int:
+    return flow_command_release_status(
+        args,
+        load_release_manifest=load_release_manifest,
+        json_dumps=json_dumps,
+    )
+
+
+def command_release_promote(args: argparse.Namespace) -> int:
+    return flow_command_release_promote(
+        args,
+        load_release_manifest=load_release_manifest,
+        workspace_config=WORKSPACE_CONFIG,
+        root_repo=ROOT_REPO,
+        load_providers_config=load_providers_config,
+        select_provider=select_provider,
+        provider_entrypoint_path=provider_entrypoint_path,
+        run_provider=run_provider,
+        release_manifest_path=release_manifest_path,
+        release_promotion_path=release_promotion_path,
+        release_verification_path=release_verification_path,
+        root=ROOT,
+        rel=rel,
+        utc_now=utc_now,
+        write_json=write_json,
+        read_state=read_state,
+        write_state=write_state,
+        replace_frontmatter_status=replace_frontmatter_status,
+        auto_worktree_cleanup=auto_cleanup_stale_worktrees,
+        json_dumps=json_dumps,
+    )
+
+
+def command_release_verify(args: argparse.Namespace) -> int:
+    return flow_command_release_verify(
+        args,
+        load_release_manifest=load_release_manifest,
+        release_manifest_path=release_manifest_path,
+        release_verification_path=release_verification_path,
+        root=ROOT,
+        rel=rel,
+        utc_now=utc_now,
+        write_json=write_json,
+        json_dumps=json_dumps,
+    )
+
+
+def command_release_publish(args: argparse.Namespace) -> int:
+    requested_version = str(getattr(args, "version", "") or "")
+    rc = flow_command_release_publish(
+        args,
+        root=ROOT,
+        changelog_path=CHANGELOG_FILE,
+        auto_worktree_cleanup=auto_cleanup_stale_worktrees,
+        utc_now=utc_now,
+        json_dumps=json_dumps,
+    )
+    if rc == 0 and not bool(getattr(args, "dry_run", False)) and flow_memory_ops.memory_execution_enabled(
+        args,
+        workspace_config=WORKSPACE_CONFIG,
+        arg_name="memory_save_outcome",
+        config_name="save_after_release_publish",
+    ):
+        flow_memory_ops.save_release_outcome(
+            root=ROOT,
+            workspace_config=WORKSPACE_CONFIG,
+            version=requested_version or "auto",
+            json_dumps=json_dumps,
+        )
+    return rc
+
+
+def command_infra_plan(args: argparse.Namespace) -> int:
+    return flow_command_infra_plan(
+        args,
+        require_dirs=require_dirs,
+        resolve_spec=resolve_spec,
+        spec_slug=spec_slug,
+        analyze_spec=analyze_spec,
+        frontmatter_list=frontmatter_list,
+        require_routed_paths=require_routed_paths,
+        load_providers_config=load_providers_config,
+        select_provider=select_provider,
+        provider_entrypoint_path=provider_entrypoint_path,
+        run_provider=run_provider,
+        rel=rel,
+        utc_now=utc_now,
+        write_json=write_json,
+        infra_report_root=INFRA_REPORT_ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def command_infra_apply(args: argparse.Namespace) -> int:
+    return flow_command_infra_apply(
+        args,
+        slugify=slugify,
+        infra_report_root=INFRA_REPORT_ROOT,
+        load_providers_config=load_providers_config,
+        select_provider=select_provider,
+        provider_entrypoint_path=provider_entrypoint_path,
+        run_provider=run_provider,
+        rel=rel,
+        utc_now=utc_now,
+        write_json=write_json,
+        json_dumps=json_dumps,
+    )
+
+
+def command_infra_status(args: argparse.Namespace) -> int:
+    return flow_command_infra_status(
+        args,
+        slugify=slugify,
+        infra_report_root=INFRA_REPORT_ROOT,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_doctor(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_doctor(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_smoke(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_smoke(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_stats(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_stats(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_search(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_search(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_export(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_export(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_backup(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_backup(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_import(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_import(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_prune(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_prune(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def command_memory_save(args: argparse.Namespace) -> int:
+    return flow_memory_ops.command_memory_save(
+        args,
+        root=ROOT,
+        workspace_config=WORKSPACE_CONFIG,
+        json_dumps=json_dumps,
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    commands = {
+        "doctor": command_doctor,
+        "init": command_init,
+        "gateway_list": command_gateway_list,
+        "gateway_status": command_gateway_status,
+        "gateway_pick": command_gateway_pick,
+        "gateway_poll": command_gateway_poll,
+        "gateway_watch": command_gateway_watch,
+        "gateway_claim": command_gateway_claim,
+        "gateway_fetch_spec": command_gateway_fetch_spec,
+        "gateway_heartbeat": command_gateway_heartbeat,
+        "gateway_transition": command_gateway_transition,
+        "gateway_release": command_gateway_release,
+        "gateway_reassign": command_gateway_reassign,
+        "memory_doctor": command_memory_doctor,
+        "memory_smoke": command_memory_smoke,
+        "memory_stats": command_memory_stats,
+        "memory_search": command_memory_search,
+        "memory_export": command_memory_export,
+        "memory_backup": command_memory_backup,
+        "memory_import": command_memory_import,
+        "memory_prune": command_memory_prune,
+        "memory_save": command_memory_save,
+        "stack_doctor": command_stack_doctor,
+        "stack_ps": command_stack_ps,
+        "stack_up": command_stack_up,
+        "stack_down": command_stack_down,
+        "stack_build": command_stack_build,
+        "stack_logs": command_stack_logs,
+        "stack_sh": command_stack_sh,
+        "stack_exec": command_stack_exec,
+        "workspace_exec": command_workspace_exec,
+        "stack_design": command_stack_design,
+        "stack_plan": command_stack_plan,
+        "stack_apply": command_stack_apply,
+        "tessl": command_tessl,
+        "bmad": command_bmad,
+        "workflow_doctor": command_workflow_doctor,
+        "workflow_intake": command_workflow_intake,
+        "workflow_next_step": command_workflow_next_step,
+        "workflow_close_feature": command_workflow_close_feature,
+        "workflow_execute_feature": command_workflow_execute_feature,
+        "workflow_run": command_workflow_run,
+        "workflow_pause": command_workflow_pause,
+        "workflow_resume": command_workflow_resume,
+        "workflow_retry": command_workflow_retry,
+        "skills_doctor": command_skills_doctor,
+        "skills_list": command_skills_list,
+        "skills_context": command_skills_context,
+        "skills_discover": command_skills_discover,
+        "skills_autoskills": command_skills_autoskills,
+        "skills_add": command_skills_add,
+        "skills_sync": command_skills_sync,
+        "skills_install": command_skills_install,
+        "providers_doctor": command_providers_doctor,
+        "providers_list": command_providers_list,
+        "submodule_doctor": command_submodule_doctor,
+        "submodule_sync": command_submodule_sync,
+        "worktree_list": command_worktree_list,
+        "worktree_clean": command_worktree_clean,
+        "worktree_create": command_worktree_create,
+        "secrets_doctor": command_secrets_doctor,
+        "secrets_list": command_secrets_list,
+        "secrets_sync": command_secrets_sync,
+        "secrets_exec": command_secrets_exec,
+        "secrets_scan": command_secrets_scan,
+        "drift_check": command_drift_check,
+        "contract_verify": command_contract_verify,
+        "ci_spec": command_ci_spec,
+        "ci_repo": command_ci_repo,
+        "ci_integration": command_ci_integration,
+        "release_cut": command_release_cut,
+        "release_manifest": command_release_manifest,
+        "release_status": command_release_status,
+        "release_promote": command_release_promote,
+        "release_verify": command_release_verify,
+        "release_publish": command_release_publish,
+        "infra_plan": command_infra_plan,
+        "infra_apply": command_infra_apply,
+        "infra_status": command_infra_status,
+        "add_project": command_add_project,
+        "repo_exec": command_repo_exec,
+        "spec_create": command_spec_create,
+        "spec_review": command_spec_review,
+        "spec_guard": command_spec_guard,
+        "spec_approve": command_spec_approve,
+        "spec_approval_status": command_spec_approval_status,
+        "spec_generate_contracts": command_spec_generate_contracts,
+        "plan": command_plan,
+        "plan_approve": command_plan_approve,
+        "plan_approval_status": command_plan_approval_status,
+        "policy_check": command_policy_check,
+        "slice_start": command_slice_start,
+        "slice_verify": command_slice_verify,
+        "status": command_status,
+        "evidence_status": command_evidence_status,
+        "evidence_bundle": command_evidence_bundle,
+        "agent_handoff": command_agent_handoff,
+        "ops_metrics": command_ops_metrics,
+        "ops_dashboard": command_ops_dashboard,
+        "ops_sla": command_ops_sla,
+        "ops_decision_add": command_ops_decision_add,
+        "ops_decision_list": command_ops_decision_list,
+        "ops_metrics": command_ops_metrics,
+        "ops_dashboard": command_ops_dashboard,
+    }
+    return flow_build_parser(
+        commands=commands,
+        provider_categories=provider_categories,
+        repo_names=REPO_NAMES,
+        implementation_repos=implementation_repos,
+        available_runtime_names=available_runtime_names,
+        available_service_runtime_names=available_service_runtime_names,
+        available_capability_names=flow_stack_design.available_capability_names,
+        runtime_error_type=RuntimeCatalogError,
+        root=ROOT,
+    )
+
+
+def main() -> int:
+    require_dirs()
+    raw_args = sys.argv[1:]
+    _enforce_workspace_only(raw_args)
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+def _enforce_workspace_only(raw_args: list[str]) -> None:
+    if running_inside_workspace():
+        return
+    if os.environ.get("FLOW_FORCE_WORKSPACE_EXEC", "1") != "1":
+        return
+    if os.environ.get("FLOW_SKIP_WORKSPACE_DELEGATION") == "1":
+        return
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        # GitHub-hosted runners execute `flow` on host by design.
+        return
+    if not raw_args:
+        return
+
+    top_level = raw_args[0]
+    if top_level == "stack":
+        # Stack lifecycle commands must run on host to create/recreate containers.
+        return
+    if top_level == "workspace" and len(raw_args) > 1 and raw_args[1] == "exec":
+        return
+
+    raise SystemExit(
+        "Host execution is blocked by FLOW_FORCE_WORKSPACE_EXEC=1. "
+        "Run commands via `python3 ./flow workspace exec -- python3 ./flow ...` "
+        "or `scripts/workspace_exec.sh python3 ./flow ...`."
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

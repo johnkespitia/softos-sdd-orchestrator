@@ -1,0 +1,36 @@
+{
+  "runtimes": {
+    "generic": {
+      "enabled": true,
+      "source": "runtimes/generic.runtime.json"
+    },
+    "go": {
+      "enabled": true,
+      "source": "runtimes/go.runtime.json"
+    },
+    "node": {
+      "enabled": true,
+      "source": "runtimes/node.runtime.json"
+    },
+    "php": {
+      "enabled": true,
+      "source": "runtimes/php.runtime.json"
+    },
+    "python": {
+      "enabled": true,
+      "source": "runtimes/python.runtime.json"
+    },
+    "mongo-service": {
+      "enabled": true,
+      "source": "runtimes/mongo-service.runtime.json"
+    },
+    "postgres-service": {
+      "enabled": true,
+      "source": "runtimes/postgres-service.runtime.json"
+    },
+    "mysql-service": {
+      "enabled": true,
+      "source": "runtimes/mysql-service.runtime.json"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "SoftOS Agentic Workspace",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "initializeCommand": "git submodule update --init --recursive",
+  "postCreateCommand": "cd /workspace && make install",
+  "containerEnv": {
+    "FLOW_HOST_ROOT": "${localWorkspaceFolder}",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind,consistency=cached"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bmewburn.vscode-intelephense-client",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "mikestead.dotenv",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "forwardPorts": [],
+  "portsAttributes": {},
+  "remoteUser": "vscode"
+}
