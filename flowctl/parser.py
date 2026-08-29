@@ -911,6 +911,22 @@ def build_parser(
     agent_doctor.add_argument("--json", action="store_true", help="Print availability as JSON.")
     agent_doctor.set_defaults(func=commands["agent_doctor"])
 
+    agent_run = agent_subparsers.add_parser(
+        "run",
+        help="Run a configured host-native executor against a bounded repo/worktree.",
+    )
+    agent_run.add_argument("executor", help="Configured executor id from workspace.config.json.")
+    agent_run.add_argument("--repo", required=True, help="Registered repo id (`workspace-root` aliases the root repo).")
+    agent_run.add_argument("--workdir", required=True, help="Existing registered repo root or recognized worktree.")
+    agent_run.add_argument("--prompt", required=True, help="Non-empty operator prompt.")
+    agent_run.add_argument(
+        "--target",
+        action="append",
+        required=True,
+        help="Existing or prospective path inside the workdir. Repeatable.",
+    )
+    agent_run.set_defaults(func=commands["agent_run"])
+
     agent_handoff = agent_subparsers.add_parser("handoff", help="Write a self-contained handoff package for another agent.")
     agent_handoff.add_argument("spec", help="Spec path or slug.")
     agent_handoff.add_argument("--json", action="store_true", help="Print the agent handoff package as JSON.")
