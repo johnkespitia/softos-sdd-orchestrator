@@ -1,5 +1,7 @@
 # Agent executors
 
+Spanish mirror: [docs/es/agent-executors.es.md](./es/agent-executors.es.md)
+
 SoftOS registers host-native agent harnesses under the top-level `agents` section of `workspace.config.json`. V1 declares `codex`, `cursor`, and `opencode-local`.
 
 ## Host prerequisites
