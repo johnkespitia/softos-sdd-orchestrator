@@ -892,8 +892,25 @@ def build_parser(
     evidence_bundle.add_argument("--json", action="store_true", help="Print evidence bundle as JSON.")
     evidence_bundle.set_defaults(func=commands["evidence_bundle"])
 
-    agent = subparsers.add_parser("agent", help="Prepare agent execution handoffs.")
+    agent = subparsers.add_parser("agent", help="Host-native executors and agent execution handoffs.")
     agent_subparsers = agent.add_subparsers(dest="agent_command", required=True)
+
+    agent_list = agent_subparsers.add_parser("list", help="List configured agent executors.")
+    agent_list.add_argument("--json", action="store_true", help="Print the registry as JSON.")
+    agent_list.set_defaults(func=commands["agent_list"])
+
+    agent_doctor = agent_subparsers.add_parser(
+        "doctor",
+        help="Check whether configured executables are available on the WSL host.",
+    )
+    agent_doctor.add_argument(
+        "executor",
+        nargs="?",
+        help="Optional executor id. When omitted, checks every configured executor.",
+    )
+    agent_doctor.add_argument("--json", action="store_true", help="Print availability as JSON.")
+    agent_doctor.set_defaults(func=commands["agent_doctor"])
+
     agent_handoff = agent_subparsers.add_parser("handoff", help="Write a self-contained handoff package for another agent.")
     agent_handoff.add_argument("spec", help="Spec path or slug.")
     agent_handoff.add_argument("--json", action="store_true", help="Print the agent handoff package as JSON.")

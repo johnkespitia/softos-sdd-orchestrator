@@ -4,6 +4,8 @@ import json
 import os
 import shlex
 import shutil
+import subprocess
+import sys
 import textwrap
 import time
 from pathlib import Path
@@ -152,6 +154,79 @@ def load_ci_service_overrides_from_env() -> dict[str, dict[str, object]]:
 def integration_profile_is_ci_clean(profile: str) -> bool:
     p = str(profile or "").strip().lower()
     return p in {"smoke:ci-clean", "smoke-ci-clean", "ci-clean"}
+
+
+def integration_profile_is_agent_executors(profile: str) -> bool:
+    return str(profile or "").strip().lower() == "agent-executors"
+
+
+def command_ci_integration_agent_executors(
+    args,
+    *,
+    slugify: Callable[[str], str],
+    utc_now: Callable[[], str],
+    ci_report_root: Path,
+    rel: Callable[[Path], str],
+    format_findings,
+    json_dumps: Callable[[object], str],
+) -> int:
+    root = Path.cwd().resolve()
+    tests_dir = root / "flowctl" / "tests"
+    if not tests_dir.is_dir():
+        raise SystemExit("No existe `flowctl/tests/` para el perfil agent-executors.")
+
+    command = [sys.executable, "-m", "pytest", str(tests_dir), "-q"]
+    completed = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
+    detail = stdout or stderr or f"pytest exit code {completed.returncode}"
+    status = "PASS" if completed.returncode == 0 else "FAIL"
+    checks = [(status, "tests", "Agent executors", detail)]
+    findings: list[str] = []
+    if completed.returncode != 0:
+        if stdout:
+            findings.append(f"pytest stdout:\n{stdout}")
+        if stderr:
+            findings.append(f"pytest stderr:\n{stderr}")
+
+    report_path = ci_report_root / f"integration-{slugify(args.profile)}.md"
+    report = textwrap.dedent(
+        f"""\
+        # CI Integration Report
+
+        - Profile: `{args.profile}`
+        - Generated at: `{utc_now()}`
+
+        ## Checks
+
+        {chr(10).join(f"- [{status}][{category}] **{name}**: {detail}" for status, category, name, detail in checks)}
+
+        ## Findings
+
+        {chr(10).join(format_findings(findings))}
+        """
+    )
+    report_path.write_text(report, encoding="utf-8")
+    payload = {
+        "generated_at": utc_now(),
+        "profile": args.profile,
+        "contract": {
+            "agent_executors_profile": True,
+            "pytest_command": command,
+        },
+        "checks": [
+            {"status": status, "category": category, "name": name, "detail": detail}
+            for status, category, name, detail in checks
+        ],
+        "findings": findings,
+        "markdown_report": rel(report_path),
+    }
+    failed = completed.returncode != 0
+    if bool(getattr(args, "json", False)):
+        print(json_dumps(payload))
+        return 1 if failed else 0
+    print(rel(report_path))
+    return 1 if failed else 0
 
 
 def resolve_ci_strict_preflight(profile: str, *, preflight_relaxed: bool) -> bool:
@@ -578,6 +653,17 @@ def command_ci_integration(
     bootstrap_runtime = bool(getattr(args, "bootstrap_runtime", False))
     strict_preflight = resolve_ci_strict_preflight(profile, preflight_relaxed=preflight_relaxed)
     service_overrides = load_ci_service_overrides_from_env()
+
+    if integration_profile_is_agent_executors(profile):
+        return command_ci_integration_agent_executors(
+            args,
+            slugify=slugify,
+            utc_now=utc_now,
+            ci_report_root=ci_report_root,
+            rel=rel,
+            format_findings=format_findings,
+            json_dumps=json_dumps,
+        )
 
     stack_up_attempts = max(1, int(os.environ.get("FLOW_CI_STACK_UP_ATTEMPTS", "3")))
     stack_up_backoff_seconds = max(0.0, float(os.environ.get("FLOW_CI_STACK_UP_BACKOFF_SECONDS", "2")))
