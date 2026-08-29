@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from flowctl.agent_executor_adapters import (
-    AdapterExecutionNotImplementedError,
     AgentAdapterInvocation,
     AgentRunRequest,
     build_execution_contract,
@@ -259,8 +258,8 @@ def run_agent_process(
     try:
         adapter = resolve_adapter(executor.adapter)
         invocation = adapter.build_invocation(request)
-    except AdapterExecutionNotImplementedError as exc:
-        raise AgentRunError(exc.message) from exc
+    except ValueError as exc:
+        raise AgentRunError(str(exc)) from exc
 
     if not executable_is_ready(executor.executable, shutil_which=shutil_which):
         raise AgentRunError(
