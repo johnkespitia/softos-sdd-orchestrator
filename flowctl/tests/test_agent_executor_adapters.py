@@ -120,7 +120,7 @@ elif harness["name"] == "cursor":
     expected_tail = ["--trust", "-p", "--", expected_prompt]
     expected_prefix = [harness["executable"], *static_argv]
 elif harness["name"] == "opencode":
-    expected_tail = ["run", "--auto", "--", expected_prompt]
+    expected_tail = ["run", "--auto", "--dir", harness["workdir"], "--", expected_prompt]
     expected_prefix = [harness["executable"], *static_argv]
 else:
     sys.stderr.write("UNKNOWN_HARNESS")
@@ -176,6 +176,35 @@ raise SystemExit(exit_code)
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
+class ExecutionContractTests(unittest.TestCase):
+    def test_repo_runtime_places_workdir_before_repo(self) -> None:
+        executor = AgentExecutor(
+            executor_id="cursor",
+            adapter="cursor",
+            executable="agent",
+            argv=(),
+        )
+        contract = build_execution_contract(
+            request=AgentRunRequest(
+                executor=executor,
+                repo="softos-agentic",
+                workspace_root="/workspace",
+                workdir="/workspace/.worktrees/demo",
+                targets=("flowctl/example.py",),
+                user_prompt="do work",
+                contract_body="",
+            )
+        )
+        self.assertIn(
+            "python3 ./flow repo exec --workdir /workspace/.worktrees/demo softos-agentic -- <command>",
+            contract,
+        )
+        self.assertNotIn(
+            "python3 ./flow repo exec softos-agentic --workdir /workspace/.worktrees/demo -- <command>",
+            contract,
+        )
+
+
 class AdapterContractTests(unittest.TestCase):
     def test_codex_argv_shape_without_static_argv(self) -> None:
         request = _sample_request(adapter="codex", executable="codex")
@@ -203,9 +232,18 @@ class AdapterContractTests(unittest.TestCase):
         delivered_prompt = build_delivered_prompt(request)
         self.assertIsNone(invocation.stdin)
         self.assertEqual(
-            ("opencode", "run", "--auto", "--", delivered_prompt),
+            ("opencode", "run", "--auto", "--dir", request.workdir, "--", delivered_prompt),
             invocation.argv,
         )
+
+    def test_opencode_argv_includes_assigned_workdir_before_prompt_delimiter(self) -> None:
+        request = _sample_request(adapter="opencode", executable="opencode")
+        invocation = OpenCodeAdapter().build_invocation(request)
+        delivered_prompt = build_delivered_prompt(request)
+        dir_index = invocation.argv.index("--dir")
+        self.assertEqual(request.workdir, invocation.argv[dir_index + 1])
+        self.assertEqual("--", invocation.argv[-2])
+        self.assertEqual(delivered_prompt, invocation.argv[-1])
 
     def test_empty_static_argv_is_canonical_for_all_adapters(self) -> None:
         for adapter_name, executable in (
@@ -307,6 +345,8 @@ class AdapterContractTests(unittest.TestCase):
             ("opencode", ("run",)),
             ("opencode", ("exec",)),
             ("opencode", ("--auto",)),
+            ("opencode", ("--dir", "/other/worktree")),
+            ("opencode", ("--dir",)),
         ]
 
     def test_unsafe_static_argv_is_rejected_before_launch(self) -> None:

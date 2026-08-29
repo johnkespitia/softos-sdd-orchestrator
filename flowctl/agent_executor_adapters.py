@@ -74,6 +74,7 @@ _ADAPTER_FORBIDDEN_STATIC_TOKENS: dict[str, frozenset[str]] = {
             "exec",
             "run",
             "--auto",
+            "--dir",
             "-p",
             "--prompt",
             "--trust",
@@ -216,7 +217,7 @@ class OpenCodeAdapter:
         argv = _build_positional_prompt_argv(
             request,
             adapter_name=self.adapter_name,
-            tail=("run", "--auto"),
+            tail=("run", "--auto", "--dir", request.workdir),
             prompt=prompt,
         )
         return AgentAdapterInvocation(argv=argv)
@@ -237,7 +238,7 @@ class GenericStdinAdapter:
 def build_execution_contract(*, request: AgentRunRequest) -> str:
     sorted_targets = "\n".join(f"  - {target}" for target in sorted(request.targets))
     repo_runtime = (
-        f"python3 ./flow repo exec {request.repo} --workdir {request.workdir} -- <command>"
+        f"python3 ./flow repo exec --workdir {request.workdir} {request.repo} -- <command>"
     )
     control_plane = "scripts/workspace_exec.sh python3 ./flow <command>"
     docker_lifecycle = "python3 ./flow stack <command>"
