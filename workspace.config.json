@@ -147,5 +147,25 @@
         }
       }
     }
+  },
+  "agents": {
+    "schema_version": 1,
+    "executors": {
+      "codex": {
+        "adapter": "codex",
+        "executable": "codex",
+        "argv": []
+      },
+      "cursor": {
+        "adapter": "cursor",
+        "executable": "agent",
+        "argv": []
+      },
+      "opencode-local": {
+        "adapter": "opencode",
+        "executable": "opencode",
+        "argv": []
+      }
+    }
   }
 }
