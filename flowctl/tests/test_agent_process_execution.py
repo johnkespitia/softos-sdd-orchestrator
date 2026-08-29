@@ -451,7 +451,7 @@ class ExecutionContractTests(unittest.TestCase):
         self.assertIn("  - a.txt", contract)
         self.assertIn("  - b.txt", contract)
         self.assertIn(
-            "python3 ./flow repo exec softos-agentic --workdir /workspace/.worktrees/demo -- <command>",
+            "python3 ./flow repo exec --workdir /workspace/.worktrees/demo softos-agentic -- <command>",
             contract,
         )
         self.assertIn("scripts/workspace_exec.sh python3 ./flow <command>", contract)
