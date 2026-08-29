@@ -473,10 +473,13 @@ def compose_exec_args(
     *,
     use_tty: bool,
     workdir: Optional[str] = None,
+    user: Optional[str] = None,
 ) -> list[str]:
     args = ["exec"]
     if not use_tty:
         args.append("-T")
+    if user:
+        args.extend(["--user", user])
     if workdir:
         args.extend(["-w", workdir])
     args.append(service)

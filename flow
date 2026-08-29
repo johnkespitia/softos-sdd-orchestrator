@@ -57,6 +57,7 @@ from flowctl.context import (
     load_secrets_config as flow_load_secrets_config,
     load_skills_config as flow_load_skills_config,
     load_json_object,
+    workspace_exec_user as flow_workspace_exec_user,
 )
 from flowctl.infra import (
     command_infra_apply as flow_command_infra_apply,
@@ -711,6 +712,7 @@ def capture_workspace_tool(tool_args: list[str]) -> dict[str, object]:
         compose_exec_args=compose_exec_args,
         workspace_service=WORKSPACE_SERVICE,
         workspace_path=WORKSPACE_PATH,
+        workspace_exec_user=workspace_exec_user(),
     )
 
 
@@ -1183,9 +1185,10 @@ def compose_exec_args(
     service: str,
     interactive: Optional[bool] = None,
     workdir: Optional[str] = None,
+    user: Optional[str] = None,
 ) -> list[str]:
     use_tty = tty_enabled() if interactive is None else interactive
-    return flow_compose_exec_args(service, use_tty=use_tty, workdir=workdir)
+    return flow_compose_exec_args(service, use_tty=use_tty, workdir=workdir, user=user)
 
 
 def run_compose(extra_args: list[str], interactive: Optional[bool] = None) -> int:
@@ -1200,6 +1203,10 @@ def normalize_passthrough(args: list[str]) -> list[str]:
     return flow_tooling.normalize_passthrough(args)
 
 
+def workspace_exec_user() -> str:
+    return flow_workspace_exec_user()
+
+
 def run_workspace_tool(
     tool_args: list[str],
     interactive: Optional[bool] = None,
@@ -1211,6 +1218,7 @@ def run_workspace_tool(
         compose_exec_args=compose_exec_args,
         workspace_service=WORKSPACE_SERVICE,
         workspace_path=WORKSPACE_PATH,
+        workspace_exec_user=workspace_exec_user(),
         interactive=interactive,
         workdir=workdir,
     )
