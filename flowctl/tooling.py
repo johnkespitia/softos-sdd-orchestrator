@@ -46,11 +46,18 @@ def run_workspace_tool(
     compose_exec_args: Callable[..., list[str]],
     workspace_service: str,
     workspace_path: str,
+    workspace_exec_user: Optional[str] = None,
     interactive: Optional[bool] = None,
     workdir: Optional[str] = None,
 ) -> int:
     return run_compose(
-        compose_exec_args(workspace_service, interactive=interactive, workdir=workdir or workspace_path) + tool_args,
+        compose_exec_args(
+            workspace_service,
+            interactive=interactive,
+            workdir=workdir or workspace_path,
+            user=workspace_exec_user,
+        )
+        + tool_args,
         interactive,
     )
 
@@ -65,12 +72,19 @@ def capture_workspace_tool(
     compose_exec_args: Callable[..., list[str]],
     workspace_service: str,
     workspace_path: str,
+    workspace_exec_user: Optional[str] = None,
 ) -> dict[str, object]:
     if running_inside_workspace():
         return capture_command(tool_args, root)
 
     return capture_compose(
-        compose_exec_args(workspace_service, interactive=False, workdir=workspace_path) + tool_args
+        compose_exec_args(
+            workspace_service,
+            interactive=False,
+            workdir=workspace_path,
+            user=workspace_exec_user,
+        )
+        + tool_args
     )
 
 
@@ -201,3 +215,44 @@ def command_repo_exec(
         compose_exec_args(service_name, interactive=False, workdir=workdir) + command,
         interactive=False,
     )
+
+
+HOST_EXECUTION_BLOCK_MESSAGE = (
+    "Host execution is blocked by FLOW_FORCE_WORKSPACE_EXEC=1. "
+    "Run commands via `python3 ./flow workspace exec -- python3 ./flow ...` "
+    "or `scripts/workspace_exec.sh python3 ./flow ...`."
+)
+
+
+def host_execution_allowed(raw_args: list[str]) -> bool:
+    if not raw_args:
+        return True
+    top_level = raw_args[0]
+    if top_level == "stack":
+        return True
+    if top_level == "agent":
+        return True
+    if top_level == "workspace" and len(raw_args) > 1 and raw_args[1] == "exec":
+        return True
+    return False
+
+
+def enforce_workspace_only_host(
+    raw_args: list[str],
+    *,
+    running_inside_workspace: bool,
+    force_workspace_exec: bool,
+    skip_delegation: bool,
+    github_actions: bool,
+) -> None:
+    if running_inside_workspace:
+        return
+    if not force_workspace_exec:
+        return
+    if skip_delegation:
+        return
+    if github_actions:
+        return
+    if host_execution_allowed(raw_args):
+        return
+    raise SystemExit(HOST_EXECUTION_BLOCK_MESSAGE)

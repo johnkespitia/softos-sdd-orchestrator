@@ -892,8 +892,41 @@ def build_parser(
     evidence_bundle.add_argument("--json", action="store_true", help="Print evidence bundle as JSON.")
     evidence_bundle.set_defaults(func=commands["evidence_bundle"])
 
-    agent = subparsers.add_parser("agent", help="Prepare agent execution handoffs.")
+    agent = subparsers.add_parser("agent", help="Host-native executors and agent execution handoffs.")
     agent_subparsers = agent.add_subparsers(dest="agent_command", required=True)
+
+    agent_list = agent_subparsers.add_parser("list", help="List configured agent executors.")
+    agent_list.add_argument("--json", action="store_true", help="Print the registry as JSON.")
+    agent_list.set_defaults(func=commands["agent_list"])
+
+    agent_doctor = agent_subparsers.add_parser(
+        "doctor",
+        help="Check whether configured executables are available on the WSL host.",
+    )
+    agent_doctor.add_argument(
+        "executor",
+        nargs="?",
+        help="Optional executor id. When omitted, checks every configured executor.",
+    )
+    agent_doctor.add_argument("--json", action="store_true", help="Print availability as JSON.")
+    agent_doctor.set_defaults(func=commands["agent_doctor"])
+
+    agent_run = agent_subparsers.add_parser(
+        "run",
+        help="Run a configured host-native executor against a bounded repo/worktree.",
+    )
+    agent_run.add_argument("executor", help="Configured executor id from workspace.config.json.")
+    agent_run.add_argument("--repo", required=True, help="Registered repo id (`workspace-root` aliases the root repo).")
+    agent_run.add_argument("--workdir", required=True, help="Existing registered repo root or recognized worktree.")
+    agent_run.add_argument("--prompt", required=True, help="Non-empty operator prompt.")
+    agent_run.add_argument(
+        "--target",
+        action="append",
+        required=True,
+        help="Existing or prospective path inside the workdir. Repeatable.",
+    )
+    agent_run.set_defaults(func=commands["agent_run"])
+
     agent_handoff = agent_subparsers.add_parser("handoff", help="Write a self-contained handoff package for another agent.")
     agent_handoff.add_argument("spec", help="Spec path or slug.")
     agent_handoff.add_argument("--json", action="store_true", help="Print the agent handoff package as JSON.")

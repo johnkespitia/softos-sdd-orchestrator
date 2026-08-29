@@ -15,6 +15,12 @@ def env_first(*names: str, default: Optional[str] = None) -> Optional[str]:
     return default
 
 
+def workspace_exec_user() -> str:
+    value = env_first("FLOW_WORKSPACE_USER", default="vscode") or "vscode"
+    candidate = value.strip()
+    return candidate or "vscode"
+
+
 def load_json_object(path: Path, label: str) -> dict[str, object]:
     if not path.is_file():
         raise SystemExit(f"Falta {path.name} en el root del workspace.")
