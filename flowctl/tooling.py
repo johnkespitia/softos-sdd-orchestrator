@@ -46,11 +46,18 @@ def run_workspace_tool(
     compose_exec_args: Callable[..., list[str]],
     workspace_service: str,
     workspace_path: str,
+    workspace_exec_user: Optional[str] = None,
     interactive: Optional[bool] = None,
     workdir: Optional[str] = None,
 ) -> int:
     return run_compose(
-        compose_exec_args(workspace_service, interactive=interactive, workdir=workdir or workspace_path) + tool_args,
+        compose_exec_args(
+            workspace_service,
+            interactive=interactive,
+            workdir=workdir or workspace_path,
+            user=workspace_exec_user,
+        )
+        + tool_args,
         interactive,
     )
 
@@ -65,12 +72,19 @@ def capture_workspace_tool(
     compose_exec_args: Callable[..., list[str]],
     workspace_service: str,
     workspace_path: str,
+    workspace_exec_user: Optional[str] = None,
 ) -> dict[str, object]:
     if running_inside_workspace():
         return capture_command(tool_args, root)
 
     return capture_compose(
-        compose_exec_args(workspace_service, interactive=False, workdir=workspace_path) + tool_args
+        compose_exec_args(
+            workspace_service,
+            interactive=False,
+            workdir=workspace_path,
+            user=workspace_exec_user,
+        )
+        + tool_args
     )
 
 
