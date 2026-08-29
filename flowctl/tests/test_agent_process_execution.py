@@ -570,14 +570,12 @@ class SensitiveMaterialTests(unittest.TestCase):
             self.assertNotIn(secret_env, diagnostic)
             self.assertNotIn(secret_argv, diagnostic)
 
-    def test_adapter_not_implemented_does_not_echo_sensitive_material(self) -> None:
+    def test_missing_executable_does_not_echo_sensitive_material(self) -> None:
         secret_prompt = "SUPER_SECRET_PROMPT_TOKEN"
         secret_env = "SUPER_SECRET_ENV_TOKEN"
-        secret_argv = "SUPER_SECRET_ARGV_TOKEN"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            fake = root / "fake-agent"
-            _write_fake_executor(fake)
+            missing_executable = str((root / "missing-executor").resolve())
             config = _write_config(
                 root,
                 agents={
@@ -585,8 +583,8 @@ class SensitiveMaterialTests(unittest.TestCase):
                     "executors": {
                         "codex": {
                             "adapter": "codex",
-                            "executable": str(fake),
-                            "argv": [secret_argv],
+                            "executable": missing_executable,
+                            "argv": [],
                         },
                     },
                 },
@@ -614,8 +612,7 @@ class SensitiveMaterialTests(unittest.TestCase):
             diagnostic = str(ctx.exception)
             self.assertNotIn(secret_prompt, diagnostic)
             self.assertNotIn(secret_env, diagnostic)
-            self.assertNotIn(secret_argv, diagnostic)
-            self.assertIn("aun no esta implementada", diagnostic)
+            self.assertIn("no esta disponible", diagnostic)
 
 
 class ExecutorResolutionTests(unittest.TestCase):
@@ -661,7 +658,7 @@ class ExecutorResolutionTests(unittest.TestCase):
             with self.assertRaises(AgentRegistryError):
                 load_agent_registry(config)
 
-    def test_v1_adapter_reports_not_implemented_when_executable_absent(self) -> None:
+    def test_v1_adapter_reports_missing_executable_when_absent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             config = _write_config(
@@ -698,13 +695,12 @@ class ExecutorResolutionTests(unittest.TestCase):
                     subprocess_run=subprocess.run,
                 )
             diagnostic = str(ctx.exception)
-            self.assertIn("aun no esta implementada", diagnostic)
-            self.assertNotIn("no esta disponible", diagnostic)
+            self.assertIn("no esta disponible", diagnostic)
 
-    def test_v1_adapter_run_stops_before_launch(self) -> None:
+    def test_v1_adapter_run_launches_with_fake_executable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            fake = root / "fake-agent"
+            fake = root / "fake-codex"
             _write_fake_executor(fake)
             config = _write_config(
                 root,
@@ -728,17 +724,17 @@ class ExecutorResolutionTests(unittest.TestCase):
                 workspace_config=workspace_config,
                 root_repo="softos-agentic",
             )
-            with self.assertRaisesRegex(AgentRunError, "aun no esta implementada"):
-                run_agent_process(
-                    executor=executor,
-                    repo=repo,
-                    workspace_root=root,
-                    workdir=workdir,
-                    targets=targets,
-                    prompt=prompt,
-                    shutil_which=lambda _: None,
-                    subprocess_run=subprocess.run,
-                )
+            exit_code, _metadata = run_agent_process(
+                executor=executor,
+                repo=repo,
+                workspace_root=root,
+                workdir=workdir,
+                targets=targets,
+                prompt=prompt,
+                shutil_which=lambda _: str(fake),
+                subprocess_run=subprocess.run,
+            )
+            self.assertEqual(0, exit_code)
 
 class CommandAgentRunIntegrationTests(unittest.TestCase):
     def test_prepare_agent_run_normalizes_targets_in_lexical_order(self) -> None:
@@ -809,8 +805,8 @@ class HostNativeRoutingTests(unittest.TestCase):
                 check=False,
             )
         self.assertNotIn(HOST_EXECUTION_BLOCK_MESSAGE, completed.stderr)
-        self.assertNotEqual(0, completed.returncode)
-        self.assertIn("aun no esta implementada", completed.stderr + completed.stdout)
+        self.assertEqual(0, completed.returncode, completed.stderr + completed.stdout)
+        self.assertIn("FAKE_STDOUT", completed.stdout)
 
 
 def argparse_namespace(**kwargs: object) -> object:
