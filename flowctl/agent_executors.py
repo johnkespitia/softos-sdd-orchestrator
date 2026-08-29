@@ -229,3 +229,45 @@ def command_agent_doctor(
             )
 
     return 0 if all(item["status"] == "ready" for item in results) else 1
+
+
+def command_agent_run(
+    args,
+    *,
+    workspace_root: Path,
+    workspace_config_file: Path,
+    workspace_config: dict[str, object],
+    worktree_root: Path,
+    root_repo: str,
+    repo_names: list[str],
+    shutil_which: Callable[[str], Optional[str]],
+    subprocess_run: Callable[..., object],
+) -> int:
+    from flowctl.agent_process_execution import AgentRunError, prepare_agent_run, run_agent_process
+
+    try:
+        executor, repo, workdir, targets, prompt = prepare_agent_run(
+            executor_id=str(getattr(args, "executor", "")),
+            repo_raw=str(getattr(args, "repo", "")),
+            workdir_raw=str(getattr(args, "workdir", "")),
+            prompt_raw=str(getattr(args, "prompt", "")),
+            target_raws=list(getattr(args, "target", []) or []),
+            workspace_root=workspace_root,
+            workspace_config_file=workspace_config_file,
+            workspace_config=workspace_config,
+            root_repo=root_repo,
+        )
+        exit_code, _metadata = run_agent_process(
+            executor=executor,
+            repo=repo,
+            workspace_root=workspace_root,
+            workdir=workdir,
+            targets=targets,
+            prompt=prompt,
+            shutil_which=shutil_which,
+            subprocess_run=subprocess_run,
+        )
+    except AgentRunError as exc:
+        raise SystemExit(exc.message) from exc
+
+    return exit_code

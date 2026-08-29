@@ -9,7 +9,7 @@ from flowctl.tooling import HOST_EXECUTION_BLOCK_MESSAGE, enforce_workspace_only
 
 class AgentHostRoutingTests(unittest.TestCase):
     def test_agent_family_allowed_on_host(self) -> None:
-        for args in (["agent", "list"], ["agent", "doctor"], ["agent", "doctor", "codex"]):
+        for args in (["agent", "list"], ["agent", "doctor"], ["agent", "doctor", "codex"], ["agent", "run", "codex"]):
             with self.subTest(args=args):
                 enforce_workspace_only_host(
                     args,
