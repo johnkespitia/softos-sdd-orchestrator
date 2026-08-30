@@ -17,4 +17,10 @@ if [ -S "$socket_path" ] && id "$workspace_user" >/dev/null 2>&1; then
     usermod -aG "$group_name" "$workspace_user"
 fi
 
+if [ "$(id -u)" -eq 0 ] && [ "$workspace_user" != "root" ] && id "$workspace_user" >/dev/null 2>&1; then
+    target_uid="$(id -u "$workspace_user")"
+    target_gid="$(id -g "$workspace_user")"
+    exec setpriv --reuid="$target_uid" --regid="$target_gid" --init-groups -- "$@"
+fi
+
 exec "$@"

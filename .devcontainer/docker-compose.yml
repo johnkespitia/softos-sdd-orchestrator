@@ -23,6 +23,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: root
+    entrypoint: ["/usr/local/share/flow/workspace-entrypoint.sh"]
     volumes:
       - ..:/workspace:cached
       - /var/run/docker.sock:/var/run/docker.sock
