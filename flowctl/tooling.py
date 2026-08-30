@@ -182,6 +182,7 @@ def command_repo_exec(
     repo_root: Callable[[str], Path],
     repo_compose_service: Callable[[str], str],
     workspace_service: str,
+    workspace_exec_user: Optional[str] = None,
     running_inside_workspace: Callable[[], bool],
     runtime_path: Callable[[Path], Path],
     repo_container_workdir: Callable[[Path], str | None],
@@ -211,8 +212,15 @@ def command_repo_exec(
             f"No pude resolver el workdir de `{execution_path}` para el repo `{repo_name}` dentro del devcontainer."
         )
 
+    if service_name == workspace_service:
+        exec_args = compose_exec_args(
+            service_name, interactive=False, workdir=workdir, user=workspace_exec_user
+        )
+    else:
+        exec_args = compose_exec_args(service_name, interactive=False, workdir=workdir)
+
     return run_compose(
-        compose_exec_args(service_name, interactive=False, workdir=workdir) + command,
+        exec_args + command,
         interactive=False,
     )
 

@@ -80,11 +80,13 @@ def command_stack_sh(
     compose_exec_args: Callable[..., list[str]],
     workspace_service: str,
     workspace_path: str,
+    workspace_exec_user: str | None = None,
 ) -> int:
     service = args.service or workspace_service
     workdir = workspace_path if service == workspace_service else None
+    exec_user = workspace_exec_user if service == workspace_service else None
     return run_compose(
-        compose_exec_args(service, interactive=True, workdir=workdir) + [args.shell],
+        compose_exec_args(service, interactive=True, workdir=workdir, user=exec_user) + [args.shell],
         True,
     )
 
@@ -97,13 +99,15 @@ def command_stack_exec(
     compose_exec_args: Callable[..., list[str]],
     workspace_service: str,
     workspace_path: str,
+    workspace_exec_user: str | None = None,
 ) -> int:
     command = normalize_passthrough(args.command)
     if not command:
         raise SystemExit("Debes indicar un comando despues del servicio. Ejemplo: `flow stack exec workspace -- ls -la`.")
     interactive = not args.no_tty
     workdir = workspace_path if args.service == workspace_service else None
+    exec_user = workspace_exec_user if args.service == workspace_service else None
     return run_compose(
-        compose_exec_args(args.service, interactive=interactive, workdir=workdir) + command,
+        compose_exec_args(args.service, interactive=interactive, workdir=workdir, user=exec_user) + command,
         interactive=interactive,
     )
