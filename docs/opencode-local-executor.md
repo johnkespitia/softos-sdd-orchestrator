@@ -1,5 +1,7 @@
 # OpenCode Local Executor for SoftOS
 
+> Español: [OpenCode Local Executor](es/opencode-local-executor.es.md)
+
 ## 1. Purpose
 
 This document records the current local OpenCode setup used to prepare `opencode-local` as a SoftOS implementation executor. It explains the responsibility boundaries, the Windows/WSL connectivity arrangement, the dedicated OpenCode worker, the evidence collected during diagnosis, the current SoftOS integration, and the work that remains.
@@ -156,7 +158,7 @@ The current `OpenCodeAdapter` in `flowctl/agent_executor_adapters.py` constructs
 opencode run --auto --dir <workdir> -- <delivered-prompt>
 ```
 
-SoftOS therefore **does not currently select `softos-local-worker` automatically**. Without another per-process or executable-level mechanism, OpenCode uses its own default agent, currently `build`.
+The executor registry itself does not encode an OpenCode agent/profile. However, selection of `softos-local-worker` has been **validated through per-process configuration** by passing `OPENCODE_CONFIG_CONTENT='{"default_agent":"softos-local-worker"}'` to the environment inherited by `flow agent run`. This keeps SoftOS provider/model agnostic while allowing OpenCode to own worker selection.
 
 Adding `--agent` through `executor.argv` is not a current solution. Static OpenCode options are deliberately restricted, and `_build_positional_prompt_argv` places validated static arguments before the adapter-owned tail. The adapter has not been modified to select the worker.
 
@@ -213,7 +215,7 @@ Run `opencode agent list` from the worktree. The canonical workstation definitio
 
 ### OpenCode uses `build` instead of `softos-local-worker`
 
-For a direct diagnostic call, pass `--agent softos-local-worker`. For `flow agent run --executor opencode-local`, this remains an expected limitation: the current adapter does not select the worker, and the final canonical selection mechanism has not been implemented. Do not claim that `opencode-local` is using the dedicated worker solely because the worker is discoverable.
+For a direct diagnostic call, pass `--agent softos-local-worker` or use the validated `opencode-softos` wrapper. The actual SoftOS path has also been validated with inherited `OPENCODE_CONFIG_CONTENT`: `flow agent run → opencode-local → OpenCodeAdapter → softos-local-worker → LM Studio → local model`.
 
 ### OpenCode executions are slow
 
@@ -227,7 +229,7 @@ First send a minimal direct `POST /v1/chat/completions` request to LM Studio, th
 
 - OpenCode still has measurable startup and context-loading overhead.
 - The instrumented benchmark reported cache write `0` and cache read `0`; no cache benefit was demonstrated in that run.
-- SoftOS does not yet force or select `softos-local-worker` for `opencode-local`.
+- The executor registry does not permanently encode `softos-local-worker`; worker selection is currently validated through per-process configuration or the workstation-level `opencode-softos` wrapper.
 - `flow agent run` does not currently provide a canonical timeout/cancel mechanism.
 - Agent discovery proves availability, not that the current SoftOS adapter selected that agent.
 - The global OpenCode agent and shell/provider configuration are workstation state outside the repository and must be reconstructed separately.
@@ -235,7 +237,7 @@ First send a minimal direct `POST /v1/chat/completions` request to LM Studio, th
 
 ## 12. Pending integration
 
-The remaining decision is how `opencode-local` will select `softos-local-worker` only for SoftOS-launched processes, without changing the default agent for normal interactive OpenCode use.
+The remaining design decision is how to make the already validated worker-selection mechanism permanent and canonical for SoftOS-launched `opencode-local` processes without changing normal interactive OpenCode behavior.
 
 One candidate is a per-process configuration override:
 
@@ -243,7 +245,7 @@ One candidate is a per-process configuration override:
 OPENCODE_CONFIG_CONTENT='{"default_agent":"softos-local-worker"}'
 ```
 
-**This candidate is not implemented or canonically validated in the SoftOS executor.** It must not be treated as current behavior.
+**This per-process override is validated.** It has been tested directly with OpenCode and through the actual `flow agent run` path. It is not yet encoded as permanent repository-level SoftOS configuration.
 
 The final design may be:
 
@@ -254,7 +256,7 @@ The final design may be:
 
 The chosen mechanism must be tested through the actual `flow agent run` path, from a SoftOS worktree, and must demonstrate that only `opencode-local` selects the worker. It must not add provider or model fields to SoftOS.
 
-After that integration is validated, the intended Orchestrator V0 can be replayed with Codex as supervisor, `opencode-local` as implementer, an independent reviewer executor, and a repair budget of at most one. The previous run was blocked when `opencode-local` stopped without output during the connectivity/configuration problem. No replay result is documented here because this documentation task did not launch one.
+The Orchestrator V0 replay was subsequently attempted with Codex as supervisor, `opencode-local` as implementer, an independent reviewer, and a repair budget of at most one. The run reached the implementer through the canonical `flow agent run` path but ended `BLOCKED` before deterministic verification. A later read-only tool-use diagnostic completed successfully, confirming that OpenCode could use `glob` and `read`, recover from an initially incorrect path, and find `command_repo_exec`. That diagnostic took roughly 75 seconds with about 8.7K input tokens, indicating that long silent periods can be caused by harness/model latency rather than a hard tool-calling deadlock.
 
 ## 13. Acceptance checklist
 
@@ -266,7 +268,9 @@ After that integration is validated, the intended Orchestrator V0 can be replaye
 - [x] `softos-local-worker` is visible from a Git worktree.
 - [x] A direct call with `--agent softos-local-worker` works.
 - [x] The SoftOS registry remains model/provider agnostic.
-- [ ] A canonical SoftOS → `softos-local-worker` selection mechanism is defined and integrated.
-- [ ] The Orchestrator V0 replay is completed after that integration.
+- [x] A per-process SoftOS → `softos-local-worker` selection mechanism is validated through the actual `flow agent run` path.
+- [x] The `opencode-softos` wrapper is validated as a workstation-level worker-selection mechanism.
+- [ ] Permanent repository-level wiring for worker selection is defined.
+- [ ] The Orchestrator V0 replay reaches deterministic verification and independent review without a platform blocker.
 
 The checked items combine current file/command inspection with the recorded validation evidence above. The two unchecked items are intentionally pending and must not be inferred from direct OpenCode success.
