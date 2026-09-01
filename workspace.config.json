@@ -164,7 +164,7 @@
       },
       "opencode-local": {
         "adapter": "opencode",
-        "executable": "opencode",
+        "executable": "opencode-softos",
         "argv": []
       }
     }
