@@ -58,7 +58,8 @@
         "../../policies/**/*.md",
         "../../profiles/**/*.md",
         "../../profiles/**/*.json"
-      ]
+      ],
+      "runtime": "python"
     }
   },
   "gateway": {
