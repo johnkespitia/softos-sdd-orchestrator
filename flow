@@ -635,8 +635,20 @@ def matches_any_pattern(path: str, patterns: list[str]) -> bool:
     return flow_features.matches_any_pattern(path, patterns)
 
 
+def effective_test_runner(repo: str) -> str:
+    config = repo_config(repo)
+    explicit = str(config.get("test_runner", "")).strip().lower()
+    if explicit:
+        return explicit
+    runtime = str(config.get("runtime", "")).strip()
+    if runtime:
+        pack = resolve_runtime_pack(ROOT, runtime, repo, str(config.get("path", ".")))
+        return str(pack.get("test_runner", "none")).strip().lower() or "none"
+    return "none"
+
+
 def detect_test_command(repo: str, repo_path: Path, test_paths: list[str]) -> Optional[list[str]]:
-    runner = str(repo_config(repo).get("test_runner", "none")).strip().lower()
+    runner = effective_test_runner(repo)
     command = flow_detect_test_command(runner, repo_path, test_paths)
     if not command:
         return None
@@ -652,7 +664,7 @@ def validate_test_reference_patterns(
     repo_path: Path,
     patterns: list[str],
 ) -> tuple[list[str], list[str], list[str]]:
-    runner = str(repo_config(repo).get("test_runner", "none")).strip().lower()
+    runner = effective_test_runner(repo)
     return flow_validate_test_reference_patterns(repo_path, runner, patterns, repo_label=repo)
 
 
