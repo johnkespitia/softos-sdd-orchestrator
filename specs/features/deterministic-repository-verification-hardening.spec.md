@@ -39,7 +39,7 @@ This is platform verification hardening. It must remain repository-generic and m
 
 ## Lifecycle and current evidence
 
-The historical draft with SHA-256 `71de31af2eddd8a6498e7adfdf9a8b605347e72806589162f1487c66328f2152` was deleted by commit `44d9209a99b9b6408e46658aa9aef88c183a533b` as lifecycle deferral for unresolved targets, not semantic rejection. Its historical PASS review is background only and is not approval authority for this reactivated draft.
+The historical draft with SHA-256 `71de31af2eddd8a6498e7adfdf9a8b605347e72806589162f1487c66328f2152` was deleted by commit `44d9209a99b9b6408e46658aa9aef88c183a533b` as lifecycle deferral for unresolved targets, not semantic rejection. Its historical PASS review is background only and is not approval authority for this reactivated specification.
 
 A preserved `host-repo-exec-routing-alignment` implementation now demonstrates the runner defect through the real canonical path:
 
@@ -120,7 +120,7 @@ Git must enumerate reportable untracked files individually. SoftOS may normalize
 | `git-scope-ignore-hygiene` | `flowctl/gittools.py` | Git diff/status normalization and changed-file inventory | Make Git authoritative for ignored and untracked file enumeration; remove filesystem re-expansion. |
 | `git-scope-ignore-hygiene` | `flowctl/test_release_scope_drift.py` | Existing changed-scope/release-drift regressions | Prove ignored bytecode exclusion, non-ignored untracked inclusion, and scoped path normalization. |
 | `slice-verification-regression` | `flowctl/test_slice_verify.py` | Existing canonical slice-verification regressions | Prove effective runner, linked execution, Git ignore semantics, and final verification outcome together. |
-| Orchestrator | This spec | Canonical intent and evidence contract | Remain draft until a fresh canonical review and later human approval. |
+| Orchestrator | This spec | Canonical intent and evidence contract | Remain the approved canonical intent and evidence contract unless refined through lifecycle governance. |
 
 All listed implementation and test targets currently exist. The historical nonexistent `flowctl/test_gittools.py` target is intentionally removed. Exclusive write ownership does not overlap between slices.
 
@@ -225,7 +225,7 @@ All listed implementation and test targets currently exist. The historical nonex
 
 ## Acceptance Criteria
 
-1. The draft produces exactly three slices with disjoint targets and declared dependencies.
+1. The specification produces exactly three slices with disjoint targets and declared dependencies.
 2. Every implementation and test target exists at review time; no unresolved target remains.
 3. Root Python linked tests validate and execute through one effective runner contract.
 4. Explicit repo-level `test_runner` overrides runtime-pack defaults.
@@ -257,7 +257,7 @@ All listed implementation and test targets currently exist. The historical nonex
   command: python3 ./flow workspace exec -- python3 ./flow ci spec specs/features/deterministic-repository-verification-hardening.spec.md --json
   blocking_on: [ci]
   environments: [local]
-  notes: validates the fresh draft contract after canonical review and later approval
+  notes: validates the approved canonical contract
 
 - name: focused-contract-tests
   level: integration
