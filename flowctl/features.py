@@ -974,6 +974,18 @@ def command_plan(
     return 0
 
 
+def _resolve_plan_runtime_path(planned_path: Path, *, plan_worktree_root: Path, worktree_root: Path) -> Path:
+    if not planned_path.is_absolute() or not plan_worktree_root.is_absolute() or not worktree_root.is_absolute():
+        return planned_path
+
+    planned_runtime_root = plan_worktree_root.parent
+    try:
+        suffix = planned_path.relative_to(planned_runtime_root)
+    except ValueError:
+        return planned_path
+    return worktree_root.parent / suffix
+
+
 def command_slice_start(
     args,
     *,
@@ -1020,8 +1032,17 @@ def command_slice_start(
                 f"Ejecuta `{plan_status['next_required_action']}`."
             )
 
-    repo_path = Path(str(selected["repo_path"]))
-    worktree = Path(str(selected["worktree"]))
+    plan_worktree_root = Path(str(plan.get("worktree_root", "")))
+    repo_path = _resolve_plan_runtime_path(
+        Path(str(selected["repo_path"])),
+        plan_worktree_root=plan_worktree_root,
+        worktree_root=worktree_root,
+    )
+    worktree = _resolve_plan_runtime_path(
+        Path(str(selected["worktree"])),
+        plan_worktree_root=plan_worktree_root,
+        worktree_root=worktree_root,
+    )
     branch = str(selected["branch"])
     worktree_root.mkdir(parents=True, exist_ok=True)
     add_command_args = [

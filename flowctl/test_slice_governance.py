@@ -380,6 +380,123 @@ targets:
     assert f"python3 ./flow repo exec api --workdir {worktree_root / 'api-demo-verify-contract'} -- <cmd>" in handoff
 
 
+@pytest.mark.parametrize(
+    ("planned_runtime_root", "current_runtime_root_name"),
+    [
+        (Path("/workspace/coding-execution-runtime-v1-spec"), "host-runtime"),
+        (Path("/home/john/workspace/softos-agentic/coding-execution-runtime-v1-spec"), "container-runtime"),
+    ],
+)
+def test_slice_start_rebases_planned_paths_to_current_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    planned_runtime_root: Path,
+    current_runtime_root_name: str,
+) -> None:
+    current_runtime_root = tmp_path / current_runtime_root_name
+    worktree_root = current_runtime_root / ".worktrees"
+    report_root = tmp_path / "reports"
+    report_root.mkdir()
+    planned_worktree_root = planned_runtime_root / ".worktrees"
+    selected = {
+        "name": "api",
+        "repo": "api",
+        "repo_path": str(planned_runtime_root / "api"),
+        "worktree": str(planned_worktree_root / "api-demo-api"),
+        "branch": "flow/demo-api",
+        "owned_targets": ["../../api/app/**"],
+    }
+    plan = {"spec_path": "specs/features/demo.spec.md", "worktree_root": str(planned_worktree_root)}
+    calls: list[list[str]] = []
+
+    class _Completed:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def run(command: list[str], **_kwargs: object) -> _Completed:
+        calls.append(command)
+        return _Completed()
+
+    monkeypatch.setattr("flowctl.features.subprocess.run", run)
+
+    rc = command_slice_start(
+        argparse.Namespace(spec="demo", slice="api"),
+        slugify=lambda value: value,
+        load_plan_and_slice=lambda _slug, _slice: (plan, selected, tmp_path / ".flow/plans/demo.json"),
+        worktree_root=worktree_root,
+        report_root=report_root,
+        read_state=lambda _slug: {},
+        write_state=lambda _slug, _payload: None,
+        rel=lambda path: str(path),
+        policy_check=lambda **_kwargs: {"allowed": True, "blocked_reasons": [], "next_required_actions": []},
+    )
+
+    expected_repo = current_runtime_root / "api"
+    expected_worktree = worktree_root / "api-demo-api"
+    assert rc == 0
+    assert calls == [
+        [
+            "git",
+            "-C",
+            str(expected_repo),
+            "worktree",
+            "add",
+            "--relative-paths",
+            str(expected_worktree),
+            "-b",
+            "flow/demo-api",
+        ]
+    ]
+    assert "/workspace/" not in " ".join(calls[0])
+    handoff = (report_root / "demo-api-handoff.md").read_text(encoding="utf-8")
+    assert f"--workdir {expected_worktree} -- <cmd>" in handoff
+
+
+def test_slice_start_preserves_paths_in_same_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_root = tmp_path / "runtime"
+    worktree_root = runtime_root / ".worktrees"
+    report_root = tmp_path / "reports"
+    report_root.mkdir()
+    repo_path = runtime_root / "api"
+    worktree = worktree_root / "api-demo-api"
+    selected = {
+        "name": "api",
+        "repo": "api",
+        "repo_path": str(repo_path),
+        "worktree": str(worktree),
+        "branch": "flow/demo-api",
+        "owned_targets": ["../../api/app/**"],
+    }
+    plan = {"spec_path": "specs/features/demo.spec.md", "worktree_root": str(worktree_root)}
+    calls: list[list[str]] = []
+
+    class _Completed:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(
+        "flowctl.features.subprocess.run",
+        lambda command, **_kwargs: (calls.append(command), _Completed())[1],
+    )
+
+    command_slice_start(
+        argparse.Namespace(spec="demo", slice="api"),
+        slugify=lambda value: value,
+        load_plan_and_slice=lambda _slug, _slice: (plan, selected, tmp_path / ".flow/plans/demo.json"),
+        worktree_root=worktree_root,
+        report_root=report_root,
+        read_state=lambda _slug: {},
+        write_state=lambda _slug, _payload: None,
+        rel=lambda path: str(path),
+        policy_check=lambda **_kwargs: {"allowed": True, "blocked_reasons": [], "next_required_actions": []},
+    )
+
+    assert calls[0][2] == str(repo_path)
+    assert calls[0][6] == str(worktree)
+
+
 def test_slice_start_requires_approved_plan_before_worktree(tmp_path: Path) -> None:
     plan_root = tmp_path / ".flow" / "plans"
     report_root = tmp_path / ".flow" / "reports"
