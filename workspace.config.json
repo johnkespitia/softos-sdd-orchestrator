@@ -166,6 +166,64 @@
         "adapter": "opencode",
         "executable": "opencode-softos",
         "argv": []
+      },
+      "opencode-cloud": {
+        "adapter": "opencode",
+        "executable": "opencode",
+        "argv": []
+      }
+    }
+  },
+  "agent_resources": {
+    "schema_version": 1,
+    "resources": {
+      "opencode-local": {
+        "executor": "opencode-local",
+        "tier": "local",
+        "capacity": 1,
+        "capabilities": [
+          "tool_calling",
+          "write",
+          "patch_unit"
+        ],
+        "data_sensitivity": "local-only",
+        "local_profile": {
+          "opencode_config": "opencode.json",
+          "worker": "softos-local-worker"
+        }
+      },
+      "opencode-free": {
+        "executor": "opencode-cloud",
+        "tier": "cloud_free",
+        "capacity": 1,
+        "capabilities": [
+          "tool_calling",
+          "write",
+          "patch_unit"
+        ],
+        "data_sensitivity": "cloud-eligible",
+        "model_resolution": {
+          "mode": "dynamic_free",
+          "provider_namespace": "opencode",
+          "candidate_pattern": "*-free",
+          "tie_break": "lexicographic"
+        }
+      },
+      "opencode-go": {
+        "executor": "opencode-cloud",
+        "tier": "cloud_paid_low",
+        "capacity": 1,
+        "capabilities": [
+          "tool_calling",
+          "write",
+          "review"
+        ],
+        "data_sensitivity": "cloud-eligible",
+        "model_resolution": {
+          "mode": "dynamic_go",
+          "provider_namespace": "opencode-go",
+          "tie_break": "lexicographic"
+        }
       }
     }
   }

@@ -809,6 +809,421 @@ class HostNativeRoutingTests(unittest.TestCase):
         self.assertIn("FAKE_STDOUT", completed.stdout)
 
 
+def _write_opencode_config(root: Path) -> None:
+    payload = {
+        "default_agent": "softos-local-worker",
+        "agent": {
+            "softos-local-worker": {
+                "model": "lmstudio/prism-ml/bonsai-27b",
+                "reasoning": True,
+                "steps": 6,
+            }
+        },
+    }
+    (root / "opencode.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _agent_resources_config(
+    *,
+    fake_opencode: str,
+    fake_opencode_softos: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "executors": {
+            "codex": {"adapter": "codex", "executable": "codex", "argv": []},
+            "opencode-local": {
+                "adapter": "opencode",
+                "executable": fake_opencode_softos,
+                "argv": [],
+            },
+            "opencode-cloud": {
+                "adapter": "opencode",
+                "executable": fake_opencode,
+                "argv": [],
+            },
+        },
+    }
+
+
+def _resource_section() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "resources": {
+            "opencode-local": {
+                "executor": "opencode-local",
+                "tier": "local",
+                "capacity": 1,
+                "capabilities": ["tool_calling", "write", "patch_unit"],
+                "data_sensitivity": "local-only",
+                "local_profile": {
+                    "opencode_config": "opencode.json",
+                    "worker": "softos-local-worker",
+                },
+            },
+            "opencode-free": {
+                "executor": "opencode-cloud",
+                "tier": "cloud_free",
+                "capacity": 1,
+                "capabilities": ["tool_calling", "write", "patch_unit"],
+                "data_sensitivity": "cloud-eligible",
+                "model_resolution": {
+                    "mode": "dynamic_free",
+                    "provider_namespace": "opencode",
+                    "candidate_pattern": "*-free",
+                    "tie_break": "lexicographic",
+                },
+            },
+            "opencode-go": {
+                "executor": "opencode-cloud",
+                "tier": "cloud_paid_low",
+                "capacity": 1,
+                "capabilities": ["tool_calling", "write", "review"],
+                "data_sensitivity": "cloud-eligible",
+                "model_resolution": {
+                    "mode": "dynamic_go",
+                    "provider_namespace": "opencode-go",
+                    "tie_break": "lexicographic",
+                },
+            },
+        },
+    }
+
+
+def _write_config_overlay_workspace(
+    root: Path,
+    *,
+    fake_opencode: Path,
+    fake_opencode_softos: Path,
+) -> Path:
+    payload: dict[str, object] = {
+        "project": {"display_name": "Test", "root_repo": "softos-agentic"},
+        "repos": {"softos-agentic": {"path": ".", "kind": "root"}},
+        "agents": _agent_resources_config(
+            fake_opencode=str(fake_opencode),
+            fake_opencode_softos=str(fake_opencode_softos),
+        ),
+        "agent_resources": _resource_section(),
+    }
+    path = root / "workspace.config.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_opencode_config(root)
+    return path
+
+
+def _write_opencode_env_probe(path: Path) -> None:
+    path.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os\n"
+        "import sys\n"
+        "content = os.environ.get('OPENCODE_CONFIG_CONTENT', '')\n"
+        "sys.stdout.write(content)\n"
+        "sys.stderr.write('')\n"
+        "if not sys.stdin.isatty():\n"
+        "    sys.stdin.read()\n"
+        "raise SystemExit(0)\n",
+        encoding="utf-8",
+    )
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+
+class ResourceExecutionBoundaryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.fake_opencode = self.root / "fake-opencode"
+        self.fake_opencode_softos = self.root / "fake-opencode-softos"
+        _write_opencode_env_probe(self.fake_opencode)
+        _write_opencode_env_probe(self.fake_opencode_softos)
+        self.config = _write_config_overlay_workspace(
+            self.root,
+            fake_opencode=self.fake_opencode,
+            fake_opencode_softos=self.fake_opencode_softos,
+        )
+        self.workspace_config = json.loads(self.config.read_text(encoding="utf-8"))
+        (self.root / "target.txt").write_text("x", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _discovery_free(self) -> object:
+        from flowctl.agent_resources import FixtureModelCatalogDiscovery, ModelCatalogEntry
+
+        return FixtureModelCatalogDiscovery(
+            models=(ModelCatalogEntry("opencode/claude-free", "opencode"),)
+        )
+
+    def _discovery_go(self) -> object:
+        from flowctl.agent_resources import FixtureModelCatalogDiscovery, ModelCatalogEntry
+
+        return FixtureModelCatalogDiscovery(
+            models=(
+                ModelCatalogEntry("opencode-go/zeta-model", "opencode-go"),
+                ModelCatalogEntry("opencode-go/alpha-model", "opencode-go"),
+            )
+        )
+
+    def test_legacy_executor_invocation_still_works(self) -> None:
+        fake_codex = self.root / "fake-codex"
+        _write_fake_executor(fake_codex)
+        config = _write_config(
+            self.root,
+            agents={
+                "schema_version": 1,
+                "executors": {
+                    "codex": {"adapter": "codex", "executable": str(fake_codex), "argv": []},
+                },
+            },
+        )
+        workspace_config = json.loads(config.read_text(encoding="utf-8"))
+        prepared = prepare_agent_run(
+            executor_id="codex",
+            repo_raw="workspace-root",
+            workdir_raw=str(self.root),
+            prompt_raw="prompt",
+            target_raws=["target.txt"],
+            workspace_root=self.root,
+            workspace_config_file=config,
+            workspace_config=workspace_config,
+            root_repo="softos-agentic",
+        )
+        exit_code, _metadata = run_agent_process(
+            executor=prepared.executor,
+            repo=prepared.repo,
+            workspace_root=self.root,
+            workdir=prepared.workdir,
+            targets=prepared.targets,
+            prompt=prepared.prompt,
+            shutil_which=lambda _: str(fake_codex),
+            subprocess_run=subprocess.run,
+        )
+        self.assertEqual(0, exit_code)
+        self.assertEqual({}, dict(prepared.env_overlay))
+
+    def test_opencode_local_uses_softos_wrapper_without_overlay(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_run(**kwargs: object) -> object:
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(args=kwargs["args"], returncode=0, stdout=b"", stderr=b"")
+
+        prepared = prepare_agent_run(
+            executor_id="opencode-local",
+            repo_raw="workspace-root",
+            workdir_raw=str(self.root),
+            prompt_raw="prompt",
+            target_raws=["target.txt"],
+            workspace_root=self.root,
+            workspace_config_file=self.config,
+            workspace_config=self.workspace_config,
+            root_repo="softos-agentic",
+        )
+        self.assertEqual("opencode-local", prepared.resource_id)
+        self.assertEqual(str(self.fake_opencode_softos), prepared.executor.executable)
+        self.assertEqual({}, dict(prepared.env_overlay))
+
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=GenericStdinAdapter(adapter_name="opencode"),
+        ):
+            run_agent_process(
+                executor=prepared.executor,
+                repo=prepared.repo,
+                workspace_root=self.root,
+                workdir=prepared.workdir,
+                targets=prepared.targets,
+                prompt=prepared.prompt,
+                shutil_which=lambda _: str(self.fake_opencode_softos),
+                subprocess_run=fake_run,
+                env_overlay=prepared.env_overlay,
+            )
+        self.assertNotIn("env", captured)
+
+    def test_opencode_free_passes_dynamic_model_via_overlay(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_run(**kwargs: object) -> object:
+            captured.update(kwargs)
+            env = kwargs.get("env", {})
+            stdout = str(env.get("OPENCODE_CONFIG_CONTENT", "")).encode("utf-8")
+            return subprocess.CompletedProcess(args=kwargs["args"], returncode=0, stdout=stdout, stderr=b"")
+
+        prepared = prepare_agent_run(
+            executor_id="opencode-free",
+            repo_raw="workspace-root",
+            workdir_raw=str(self.root),
+            prompt_raw="prompt",
+            target_raws=["target.txt"],
+            workspace_root=self.root,
+            workspace_config_file=self.config,
+            workspace_config=self.workspace_config,
+            root_repo="softos-agentic",
+            discovery=self._discovery_free(),
+        )
+        self.assertEqual("opencode-free", prepared.resource_id)
+        self.assertEqual(str(self.fake_opencode), prepared.executor.executable)
+        parsed = json.loads(prepared.env_overlay["OPENCODE_CONFIG_CONTENT"])
+        self.assertEqual("opencode/claude-free", parsed["model"])
+        self.assertEqual("softos-cloud-worker", parsed["default_agent"])
+        self.assertEqual("opencode/claude-free", parsed["agent"]["softos-cloud-worker"]["model"])
+        self.assertNotIn("softos-local-worker", prepared.env_overlay["OPENCODE_CONFIG_CONTENT"])
+        self.assertNotIn("bonsai", prepared.env_overlay["OPENCODE_CONFIG_CONTENT"].lower())
+
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=GenericStdinAdapter(adapter_name="opencode"),
+        ):
+            exit_code, _metadata = run_agent_process(
+                executor=prepared.executor,
+                repo=prepared.repo,
+                workspace_root=self.root,
+                workdir=prepared.workdir,
+                targets=prepared.targets,
+                prompt=prepared.prompt,
+                shutil_which=lambda _: str(self.fake_opencode),
+                subprocess_run=fake_run,
+                env_overlay=prepared.env_overlay,
+                resource_id=prepared.resource_id,
+            )
+        self.assertEqual(0, exit_code)
+        env = captured["env"]
+        self.assertIn("PATH", env)
+        self.assertIn("opencode/claude-free", env["OPENCODE_CONFIG_CONTENT"])
+        argv = captured["args"]
+        joined = " ".join(str(item) for item in argv)
+        self.assertNotIn("--model", joined)
+        self.assertNotIn("--provider", joined)
+
+    def test_opencode_go_unauthenticated_does_not_spawn(self) -> None:
+        spawn_called = False
+
+        def fake_run(**kwargs: object) -> object:
+            nonlocal spawn_called
+            spawn_called = True
+            return subprocess.CompletedProcess(args=kwargs["args"], returncode=0, stdout=b"", stderr=b"")
+
+        with self.assertRaisesRegex(AgentRunError, "AUTH_UNCONFIGURED"):
+            prepare_agent_run(
+                executor_id="opencode-go",
+                repo_raw="workspace-root",
+                workdir_raw=str(self.root),
+                prompt_raw="prompt",
+                target_raws=["target.txt"],
+                workspace_root=self.root,
+                workspace_config_file=self.config,
+                workspace_config=self.workspace_config,
+                root_repo="softos-agentic",
+                discovery=self._discovery_go(),
+                subprocess_run=fake_run,
+            )
+        self.assertFalse(spawn_called)
+
+    def test_opencode_go_with_fixture_evidence_applies_overlay(self) -> None:
+        from flowctl.agent_resources import RuntimeEvidence
+
+        captured: dict[str, object] = {}
+
+        def fake_run(**kwargs: object) -> object:
+            captured.update(kwargs)
+            env = kwargs.get("env", {})
+            stdout = str(env.get("OPENCODE_CONFIG_CONTENT", "")).encode("utf-8")
+            return subprocess.CompletedProcess(args=kwargs["args"], returncode=0, stdout=stdout, stderr=b"")
+
+        evidence = RuntimeEvidence(auth_configured={"opencode-go": True})
+        prepared = prepare_agent_run(
+            executor_id="opencode-go",
+            repo_raw="workspace-root",
+            workdir_raw=str(self.root),
+            prompt_raw="prompt",
+            target_raws=["target.txt"],
+            workspace_root=self.root,
+            workspace_config_file=self.config,
+            workspace_config=self.workspace_config,
+            root_repo="softos-agentic",
+            discovery=self._discovery_go(),
+            evidence=evidence,
+        )
+        self.assertEqual("opencode-go/alpha-model", json.loads(prepared.env_overlay["OPENCODE_CONFIG_CONTENT"])["model"])
+        self.assertEqual(
+            "softos-cloud-worker",
+            json.loads(prepared.env_overlay["OPENCODE_CONFIG_CONTENT"])["default_agent"],
+        )
+        self.assertEqual(str(self.fake_opencode), prepared.executor.executable)
+
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=GenericStdinAdapter(adapter_name="opencode"),
+        ):
+            run_agent_process(
+                executor=prepared.executor,
+                repo=prepared.repo,
+                workspace_root=self.root,
+                workdir=prepared.workdir,
+                targets=prepared.targets,
+                prompt=prepared.prompt,
+                shutil_which=lambda _: str(self.fake_opencode),
+                subprocess_run=fake_run,
+                env_overlay=prepared.env_overlay,
+            )
+        self.assertIn("opencode-go/alpha-model", captured["env"]["OPENCODE_CONFIG_CONTENT"])
+
+    def test_environment_merge_preserves_inherited_values(self) -> None:
+        captured: dict[str, object] = {}
+        inherited = "PRESERVED_OVERLAY_PROBE"
+
+        def fake_run(**kwargs: object) -> object:
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(args=kwargs["args"], returncode=0, stdout=b"", stderr=b"")
+
+        prepared = prepare_agent_run(
+            executor_id="opencode-free",
+            repo_raw="workspace-root",
+            workdir_raw=str(self.root),
+            prompt_raw="prompt",
+            target_raws=["target.txt"],
+            workspace_root=self.root,
+            workspace_config_file=self.config,
+            workspace_config=self.workspace_config,
+            root_repo="softos-agentic",
+            discovery=self._discovery_free(),
+        )
+        with mock.patch.dict(os.environ, {"PRESERVED_OVERLAY_PROBE": inherited}, clear=False):
+            with mock.patch(
+                "flowctl.agent_process_execution.resolve_adapter",
+                return_value=GenericStdinAdapter(adapter_name="opencode"),
+            ):
+                run_agent_process(
+                    executor=prepared.executor,
+                    repo=prepared.repo,
+                    workspace_root=self.root,
+                    workdir=prepared.workdir,
+                    targets=prepared.targets,
+                    prompt=prepared.prompt,
+                    shutil_which=lambda _: str(self.fake_opencode),
+                    subprocess_run=fake_run,
+                    env_overlay=prepared.env_overlay,
+                )
+        self.assertEqual(inherited, captured["env"]["PRESERVED_OVERLAY_PROBE"])
+
+    def test_unavailable_free_resource_blocks_execution(self) -> None:
+        from flowctl.agent_resources import FixtureModelCatalogDiscovery
+
+        discovery = FixtureModelCatalogDiscovery(models=())
+        with self.assertRaisesRegex(AgentRunError, "MODEL_UNAVAILABLE"):
+            prepare_agent_run(
+                executor_id="opencode-free",
+                repo_raw="workspace-root",
+                workdir_raw=str(self.root),
+                prompt_raw="prompt",
+                target_raws=["target.txt"],
+                workspace_root=self.root,
+                workspace_config_file=self.config,
+                workspace_config=self.workspace_config,
+                root_repo="softos-agentic",
+                discovery=discovery,
+            )
+
+
 def argparse_namespace(**kwargs: object) -> object:
     class Namespace:
         pass

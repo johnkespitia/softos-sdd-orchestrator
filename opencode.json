@@ -1,5 +1,28 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "default_agent": "softos-local-worker",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio Local",
+      "options": {
+        "baseURL": "{env:LM_STUDIO_BASE_URL}"
+      },
+      "models": {
+        "prism-ml/bonsai-27b": {
+          "name": "Bonsai 27B"
+        }
+      }
+    }
+  },
+  "agent": {
+    "softos-local-worker": {
+      "model": "lmstudio/prism-ml/bonsai-27b",
+      "reasoning": true,
+      "steps": 6,
+      "temperature": 0.1
+    }
+  },
   "mcp": {
     "engram": {
       "type": "local",

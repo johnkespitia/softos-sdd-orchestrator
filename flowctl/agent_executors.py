@@ -246,7 +246,7 @@ def command_agent_run(
     from flowctl.agent_process_execution import AgentRunError, prepare_agent_run, run_agent_process
 
     try:
-        executor, repo, workdir, targets, prompt = prepare_agent_run(
+        prepared = prepare_agent_run(
             executor_id=str(getattr(args, "executor", "")),
             repo_raw=str(getattr(args, "repo", "")),
             workdir_raw=str(getattr(args, "workdir", "")),
@@ -258,14 +258,16 @@ def command_agent_run(
             root_repo=root_repo,
         )
         exit_code, _metadata = run_agent_process(
-            executor=executor,
-            repo=repo,
+            executor=prepared.executor,
+            repo=prepared.repo,
             workspace_root=workspace_root,
-            workdir=workdir,
-            targets=targets,
-            prompt=prompt,
+            workdir=prepared.workdir,
+            targets=prepared.targets,
+            prompt=prepared.prompt,
             shutil_which=shutil_which,
             subprocess_run=subprocess_run,
+            env_overlay=prepared.env_overlay,
+            resource_id=prepared.resource_id,
         )
     except AgentRunError as exc:
         raise SystemExit(exc.message) from exc

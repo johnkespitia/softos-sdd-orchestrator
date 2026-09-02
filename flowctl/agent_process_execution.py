@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
 from flowctl.agent_executor_adapters import (
     AgentAdapterInvocation,
@@ -15,6 +15,13 @@ from flowctl.agent_executor_adapters import (
     resolve_adapter,
 )
 from flowctl.agent_executors import AgentExecutor, AgentRegistryError, load_agent_registry
+from flowctl.agent_resources import (
+    AgentResourceError,
+    ModelCatalogDiscovery,
+    RuntimeEvidence,
+    default_model_catalog_discovery,
+    resolve_agent_run_selector,
+)
 
 
 class AgentRunError(Exception):
@@ -33,6 +40,25 @@ class AgentRunMetadata:
     started_at: str
     finished_at: str
     exit_code: int
+    resource_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PreparedAgentRun:
+    executor: AgentExecutor
+    repo: str
+    workdir: Path
+    targets: tuple[str, ...]
+    prompt: str
+    env_overlay: Mapping[str, str] = field(default_factory=dict)
+    resource_id: str | None = None
+
+    def __iter__(self) -> object:
+        yield self.executor
+        yield self.repo
+        yield self.workdir
+        yield self.targets
+        yield self.prompt
 
 
 def path_is_contained(child: Path, parent: Path) -> bool:
@@ -196,6 +222,7 @@ def execute_subprocess(
     invocation: AgentAdapterInvocation,
     *,
     cwd: Path,
+    env_overlay: Mapping[str, str] | None = None,
     subprocess_run: Callable[..., object] = subprocess.run,
 ) -> tuple[int, bytes, bytes]:
     kwargs: dict[str, object] = {
@@ -206,6 +233,10 @@ def execute_subprocess(
     }
     if invocation.stdin is not None:
         kwargs["input"] = invocation.stdin.encode("utf-8")
+    if env_overlay:
+        merged = dict(os.environ)
+        merged.update(env_overlay)
+        kwargs["env"] = merged
 
     try:
         completed = subprocess_run(**kwargs)
@@ -230,6 +261,8 @@ def run_agent_process(
     shutil_which: Callable[[str], Optional[str]],
     subprocess_run: Callable[..., object] = subprocess.run,
     stream_writer: Callable[[str, bytes], None] | None = None,
+    env_overlay: Mapping[str, str] | None = None,
+    resource_id: str | None = None,
 ) -> tuple[int, AgentRunMetadata]:
     started_at = datetime.now(timezone.utc).isoformat()
     workdir_resolved = str(workdir.resolve())
@@ -270,6 +303,7 @@ def run_agent_process(
     exit_code, stdout, stderr = execute_subprocess(
         invocation,
         cwd=workdir,
+        env_overlay=env_overlay,
         subprocess_run=subprocess_run,
     )
     writer = stream_writer or _default_stream_writer
@@ -287,6 +321,7 @@ def run_agent_process(
         started_at=started_at,
         finished_at=finished_at,
         exit_code=exit_code,
+        resource_id=resource_id,
     )
     return exit_code, metadata
 
@@ -318,7 +353,10 @@ def prepare_agent_run(
     workspace_config: dict[str, object],
     root_repo: str,
     run_git: Callable[..., object] = subprocess.run,
-) -> tuple[AgentExecutor, str, Path, tuple[str, ...], str]:
+    discovery: ModelCatalogDiscovery | None = None,
+    evidence: RuntimeEvidence | None = None,
+    subprocess_run: Callable[..., object] = subprocess.run,
+) -> PreparedAgentRun:
     try:
         executors = load_agent_registry(workspace_config_file)
     except AgentRegistryError as exc:
@@ -327,9 +365,26 @@ def prepare_agent_run(
     selected_id = executor_id.strip()
     if not selected_id:
         raise AgentRunError("Debes indicar un executor.")
-    executor = executors.get(selected_id)
+
+    catalog_discovery = discovery
+    if catalog_discovery is None:
+        catalog_discovery = default_model_catalog_discovery(subprocess_run=subprocess_run)
+
+    try:
+        resolution = resolve_agent_run_selector(
+            selected_id,
+            workspace_root=workspace_root,
+            workspace_config=workspace_config,
+            executors=executors,
+            discovery=catalog_discovery,
+            evidence=evidence,
+        )
+    except AgentResourceError as exc:
+        raise AgentRunError(exc.message) from exc
+
+    executor = executors.get(resolution.executor_id)
     if executor is None:
-        raise AgentRunError(f"Executor desconocido: `{selected_id}`.")
+        raise AgentRunError(f"Executor desconocido: `{resolution.executor_id}`.")
 
     repos = workspace_config.get("repos")
     if not isinstance(repos, dict):
@@ -350,4 +405,12 @@ def prepare_agent_run(
     )
     prompt = validate_prompt(prompt_raw)
     targets = normalize_targets(workdir, target_raws)
-    return executor, repo, workdir, targets, prompt
+    return PreparedAgentRun(
+        executor=executor,
+        repo=repo,
+        workdir=workdir,
+        targets=targets,
+        prompt=prompt,
+        env_overlay=resolution.env_overlay,
+        resource_id=resolution.resource_id,
+    )
