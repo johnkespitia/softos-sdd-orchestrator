@@ -24,7 +24,10 @@ targets:
   - ../../workspace.config.json
   - ../../opencode.json
   - ../../flowctl/agent_resources.py
+  - ../../flowctl/agent_executors.py
+  - ../../flowctl/agent_process_execution.py
   - ../../flowctl/tests/test_agent_resources.py
+  - ../../flowctl/tests/test_agent_process_execution.py
   - ../../docs/opencode-execution-resources.md
   - ../../policies/coding-execution-runtime-v1.json
   - ../../flowctl/coding_execution_policy.py
@@ -47,9 +50,28 @@ Close Coding Execution Runtime V1 with four observable outcomes:
 
 The V1 result is a bounded execution contract and playbook. It is not a durable scheduler.
 
+## Semantic refinement (post-S1 audit)
+
+A real S1 implementation audit found an execution-boundary defect in slice `opencode-resource-pools`: logical resources and dynamic Free/Go model resolution were correct in metadata and diagnostics, but the resolved model never reached the spawned OpenCode child process.
+
+Current harness path:
+
+```text
+flow agent run
+  -> command_agent_run()
+  -> prepare_agent_run(executor_id)
+  -> OpenCodeAdapter
+  -> AgentAdapterInvocation(argv, stdin)
+  -> execute_subprocess()
+```
+
+Observed defect: `opencode-free` and `opencode-go` referenced executor `opencode-local`, which launches `opencode-softos` with `default_agent=softos-local-worker` (the Bonsai profile). `resolve_free_model()` / `resolve_go_model()` affected diagnostics only; `execute_subprocess()` had no resource-specific environment overlay path.
+
+This refinement returns the spec to `draft`. Prior approval and any generated plan are no longer authoritative. Human re-approval is required before planning or further implementation resumes.
+
 ## Context and existing conventions
 
-- `workspace.config.json` already owns the versioned, model-agnostic executor registry. `flowctl/agent_executors.py` and `flowctl/agent_executor_adapters.py` keep invocation behind adapter contracts and reject generic model/provider flags.
+- `workspace.config.json` already owns the versioned, model-agnostic executor registry. `flowctl/agent_executors.py` and `flowctl/agent_executor_adapters.py` keep invocation behind adapter contracts and reject generic model/provider flags. `flowctl/agent_process_execution.py` owns subprocess launch and must remain the process-environment boundary for resource overlays.
 - `opencode.json` is the existing repository-owned OpenCode configuration distributed with the workspace. It is the canonical portable source for the `softos-local-worker` definition and its model selection; `~/.config/opencode/**`, wrapper scripts, authentication stores, and environment overrides are machine-local materialized state only.
 - `.agents/skills/**` plus `workspace.skills.json` are the existing portable skill convention.
 - `policies/**` contains versioned machine-readable or documented harness policy. `.flow/**` remains derived operational state and evidence, never product truth.
@@ -91,21 +113,61 @@ SoftOS can invoke host-native executors but cannot yet describe logical OpenCode
 | Layer | Owns | Must not own |
 | --- | --- | --- |
 | SoftOS Core/policy | logical resource IDs, capabilities, availability state, cost tier, capacity, selection priority, failure semantics | hardcoded model/provider branches, provider credentials, machine-local auth |
-| Executor/resource configuration | adapter, executable, resource pool, capability declarations, model-resolution policy, capacity | tokens or claims that auth is configured without a runtime probe |
+| Executor/resource configuration | adapter, executable, resource pool, capability declarations, model-resolution policy, capacity, underlying executor references | tokens or claims that auth is configured without a runtime probe |
+| Harness/process execution (`agent_executors.py`, `agent_process_execution.py`) | resource-aware selection before executor launch, logical-resource ID propagation, validated process-environment overlay merge at subprocess boundary | generic `--model` / `--provider` CLI flags, credential serialization, wholesale environment replacement |
 | OpenCode repository config | portable `softos-local-worker` profile and canonical local model selection | secrets or machine-specific absolute paths |
 | OpenCode machine-local state | authenticated providers, temporary model inventory, local LM Studio endpoint/materialization | canonical product policy |
 
-The orchestration algorithm selects a logical resource before that resource resolves a model. Core branches may inspect resource metadata and normalized availability states, but never model or provider identity.
+The orchestration algorithm selects a logical resource before that resource resolves a model. Core branches may inspect resource metadata and normalized availability states, but never model or provider identity. `flowctl/agent_executor_adapters.py` remains model/provider agnostic; resource-specific OpenCode model selection is applied only through the harness process boundary and validated environment overlay, not adapter argv flags.
+
+### Execution harness boundary
+
+The V1 harness must close the gap between logical resource metadata and the spawned OpenCode process:
+
+```text
+requested logical resource ID
+  -> generic resource lookup
+  -> underlying executor lookup
+  -> dynamic resource model resolution
+  -> safe OpenCode process environment/config overlay
+  -> subprocess execution
+```
+
+Harness behavior by resource:
+
+| Resource | Underlying executor | Wrapper/profile | Model resolution effect |
+| --- | --- | --- | --- |
+| `opencode-local` | existing local executor (`executable: opencode-softos`) | repository-owned `softos-local-worker` | fixed Bonsai via portable OpenCode profile; capacity `1` |
+| `opencode-free` | generic direct OpenCode cloud executor (`executable: opencode`) declared in workspace configuration | MUST NOT execute through a wrapper that forces Bonsai | dynamically resolved free model MUST affect the actual spawned OpenCode process |
+| `opencode-go` | same generic direct OpenCode cloud executor as Free when auth evidence exists | MUST NOT execute through the local Bonsai wrapper | remains `AUTH_UNCONFIGURED` until supported runtime evidence exists; after valid evidence, dynamically resolved Go model MUST affect the actual process |
+
+The logical resource ID must remain available through the harness boundary even when multiple logical resources share one underlying executor configuration.
+
+Legacy invocation `flow agent run <executor-id> ...` must continue working. The resource layer may resolve a positional selection as a logical resource ID first and then its underlying executor, avoiding a new CLI/parser surface for V1. Do not add a `--resource` flag unless repository evidence proves it is necessary.
+
+### Process environment overlay
+
+The process execution boundary may receive a safe resource-specific environment overlay. The OpenCode resource layer may build `OPENCODE_CONFIG_CONTENT` for the selected process using the resolved model.
+
+Overlay rules:
+
+- process-local only; never persisted to Git or evidence
+- contains no credentials and does not persist raw provider/auth payloads
+- merges with the inherited process environment; must not replace the whole inherited environment accidentally
+- preserves the bounded repository-owned worker contract for `opencode-local` while changing only the selected model for Free/Go
+- must never make Free/Go inherit Bonsai accidentally unless that model were actually returned as the selected cloud candidate
+
+`execute_subprocess()` must merge a validated overlay with the inherited process environment rather than replace it wholesale. Equivalent existing conventions are acceptable if they preserve this boundary. Do not modify `flowctl/agent_executor_adapters.py` unless later evidence proves unavoidable.
 
 ### Resource contract
 
 The existing `agents` configuration must evolve compatibly rather than creating a parallel registry. Executor IDs remain harness identities. Logical resource records reference an existing executor/adapter and expose only validated fields needed by selection and diagnostics.
 
-| Resource | Cost/tier | Capacity | Model resolution | Initial/runtime availability |
-| --- | --- | ---: | --- | --- |
-| `opencode-local` | local | 1 | fixed by repository-owned OpenCode profile to `lmstudio/prism-ml/bonsai-27b` | runtime probe; unavailable if executable/profile/model endpoint cannot be resolved |
-| `opencode-free` | cloud/free | declared conservatively | dynamically choose only from currently available OpenCode `*-free` candidates after capability filtering; deterministic ordering/tie-break is configuration-owned and testable | runtime discovery; no matching candidate is `MODEL_UNAVAILABLE`; quota/provider errors map to normalized states |
-| `opencode-go` | cloud/paid-low | declared conservatively | dynamic after OpenCode-managed authentication exposes the pool; no permanent model name | `AUTH_UNCONFIGURED` until current OpenCode evidence proves authentication is configured |
+| Resource | Cost/tier | Capacity | Underlying executor | Model resolution | Initial/runtime availability |
+| --- | --- | ---: | --- | --- | --- |
+| `opencode-local` | local | 1 | local wrapper executor (`opencode-softos`) | fixed by repository-owned OpenCode profile to `lmstudio/prism-ml/bonsai-27b` | runtime probe; unavailable if executable/profile/model endpoint cannot be resolved |
+| `opencode-free` | cloud/free | declared conservatively | generic direct OpenCode cloud executor (`executable: opencode`) | dynamically choose only from currently available OpenCode `*-free` candidates after capability filtering; deterministic ordering/tie-break is configuration-owned and testable; resolved model MUST reach subprocess overlay | runtime discovery; no matching candidate is `MODEL_UNAVAILABLE`; quota/provider errors map to normalized states |
+| `opencode-go` | cloud/paid-low | declared conservatively | same generic direct OpenCode cloud executor as Free when authenticated | dynamic after OpenCode-managed authentication exposes the pool; no permanent model name; resolved model MUST reach subprocess overlay after valid auth evidence | `AUTH_UNCONFIGURED` until current OpenCode evidence proves authentication is configured |
 
 The implementation must validate schema version, unique resource IDs, executor references, field types, supported policy values, and forbidden credential/model fields. Free and Go resolution must use an injectable discovery boundary so tests use fixtures, not network or real credentials.
 
@@ -244,23 +306,31 @@ If local is unavailable before any local Patch Unit can run, the run may demonst
     - ../../workspace.config.json
     - ../../opencode.json
     - ../../flowctl/agent_resources.py
+    - ../../flowctl/agent_executors.py
+    - ../../flowctl/agent_process_execution.py
     - ../../flowctl/tests/test_agent_resources.py
+    - ../../flowctl/tests/test_agent_process_execution.py
     - ../../docs/opencode-execution-resources.md
-  hot_area: portable OpenCode resource registry profile resolution and diagnostics
+  hot_area: portable OpenCode resource registry profile resolution diagnostics and harness process overlay
   depends_on: []
   execution_difficulty: high
   preferred_implementer: cursor
   preferred_reviewer: codex
   slice_mode: implementation-heavy
   surface_policy: required
-  minimum_valid_completion: three validated logical resources with portable Bonsai local configuration dynamic free and Go resolution and normalized availability states
+  minimum_valid_completion: three validated logical resources with portable Bonsai local configuration dynamic free and Go resolution normalized availability states and resource-aware subprocess environment overlay that applies resolved cloud models without Bonsai wrapper leakage
   validated_noop_allowed: false
   acceptable_evidence:
     - schema and forbidden credential/model field tests
-    - local profile resolves Bonsai with capacity one without adding generic model flags
-    - free candidates resolve dynamically from fixtures
-    - Go begins AUTH_UNCONFIGURED and resolves dynamically only after supported auth evidence
-    - existing executor list doctor and adapter tests remain green
+    - legacy executor selection still works through flow agent run
+    - opencode-local still launches local wrapper/profile and resolves Bonsai with capacity one without adding generic model flags
+    - opencode-free resolves to direct OpenCode cloud execution and process overlay contains the dynamically selected free model
+    - opencode-go cannot launch while AUTH_UNCONFIGURED
+    - authenticated Go fixture resolves dynamic model and process overlay uses it
+    - Free/Go overlay never contains Bonsai unless that model were actually returned as the selected cloud candidate
+    - environment overlay preserves inherited safe environment and credentials/auth payloads are never serialized
+    - no generic model/provider CLI flags
+    - existing executor/process tests remain green
 
 - name: patch-unit-execution-policy
   repo: sdd-workspace-boilerplate
@@ -335,36 +405,39 @@ If local is unavailable before any local Patch Unit can run, the run may demonst
 
 ## Target ownership summary
 
-Slice target sets are pairwise disjoint. The spec itself remains orchestrator-owned and is not a slice write target. `full-run-validation` owns only its canonical protocol/evidence document in the V1 validation/evidence worktree. Implementation changes for `git-scope-ignore-hygiene` occur only in a separate cross-spec execution worktree, remain governed exclusively by the already-approved `deterministic-repository-verification-hardening` source spec/plan, and retain that slice's ownership of `flowctl/gittools.py` and `flowctl/test_release_scope_drift.py`.
+Slice target sets are pairwise disjoint. The spec itself remains orchestrator-owned and is not a slice write target. `opencode-resource-pools` owns the resource registry, harness selection/overlay boundary (`agent_executors.py`, `agent_process_execution.py`), and their focused tests. `full-run-validation` owns only its canonical protocol/evidence document in the V1 validation/evidence worktree. Implementation changes for `git-scope-ignore-hygiene` occur only in a separate cross-spec execution worktree, remain governed exclusively by the already-approved `deterministic-repository-verification-hardening` source spec/plan, and retain that slice's ownership of `flowctl/gittools.py` and `flowctl/test_release_scope_drift.py`.
 
 ## Acceptance criteria
 
 1. Exactly four slices preserve the four product outcomes and have pairwise-disjoint write ownership.
-2. Core and generic adapter invocation contain no model/provider-specific routing branch or model flag.
-3. `opencode-local` resolves the repository-owned `softos-local-worker` to `lmstudio/prism-ml/bonsai-27b`, reasoning on, bounded sessions, and logical capacity `1`.
-4. `opencode-free` discovers currently available free models dynamically; no specific free model is a permanent contract.
-5. `opencode-go` is representable and begins `AUTH_UNCONFIGURED`; no token name, token value, or fake auth implementation is added.
-6. All ten availability states are validated and unavailable/incompatible resources are filtered before priority.
-7. Product Slice, Execution Task, dependency DAG, and Patch Unit are distinct validated concepts.
-8. The complete canonical process, priority table, capability filters, reviewer independence, and failure semantics are machine-readable and documented.
-9. Repair and retry are bounded; reducible failures consider re-decomposition before stronger/paid escalation; unchanged work is never blindly downgraded after capability failure.
-10. Implementation exit `0` with zero authorized diff and no explicit blocker is rejected; unauthorized writes and invented contracts receive required error classifications.
-11. The reusable skill is repository-owned and registered through existing skill conventions.
-12. The real full run satisfies every PASS condition or reports an evidence-backed `BLOCKED`; fallback-only evidence cannot masquerade as a local Bonsai validation.
-13. No durable scheduler, lease, run database, parallel execution engine, secret store, automatic merge/release, or preserved-worktree mutation is introduced.
-14. All focused tests, spec CI, root repo CI applicable to changed targets, integrated target-slice verification, and independent reviews pass before closeout.
-15. No commit, push, PR, merge, release, or publication is authorized by this spec.
+2. Core and generic adapter invocation contain no model/provider-specific routing branch or model flag; `flowctl/agent_executor_adapters.py` is not modified unless later evidence proves unavoidable.
+3. `opencode-local` resolves the repository-owned `softos-local-worker` to `lmstudio/prism-ml/bonsai-27b`, reasoning on, bounded sessions, and logical capacity `1`, launching through the existing local wrapper executor.
+4. `opencode-free` discovers currently available free models dynamically, executes through a direct OpenCode cloud executor without the Bonsai wrapper, and applies the resolved model to the spawned process via a validated environment overlay; no specific free model is a permanent contract.
+5. `opencode-go` is representable, begins `AUTH_UNCONFIGURED`, cannot launch until supported auth evidence exists, and after valid evidence applies the dynamically resolved model to the spawned process; no token name, token value, or fake auth implementation is added.
+6. The harness preserves logical resource ID through selection and subprocess launch even when Free and Go share one underlying executor.
+7. `execute_subprocess()` merges validated resource overlays with inherited environment without wholesale replacement or credential serialization.
+8. Legacy `flow agent run <executor-id> ...` continues working without a new `--resource` flag.
+9. All ten availability states are validated and unavailable/incompatible resources are filtered before priority.
+10. Product Slice, Execution Task, dependency DAG, and Patch Unit are distinct validated concepts.
+11. The complete canonical process, priority table, capability filters, reviewer independence, and failure semantics are machine-readable and documented.
+12. Repair and retry are bounded; reducible failures consider re-decomposition before stronger/paid escalation; unchanged work is never blindly downgraded after capability failure.
+13. Implementation exit `0` with zero authorized diff and no explicit blocker is rejected; unauthorized writes and invented contracts receive required error classifications.
+14. The reusable skill is repository-owned and registered through existing skill conventions.
+15. The real full run satisfies every PASS condition or reports an evidence-backed `BLOCKED`; fallback-only evidence cannot masquerade as a local Bonsai validation.
+16. No durable scheduler, lease, run database, parallel execution engine, secret store, automatic merge/release, or preserved-worktree mutation is introduced.
+17. All focused tests, spec CI, root repo CI applicable to changed targets, integrated target-slice verification, and independent reviews pass before closeout.
+18. No commit, push, PR, merge, release, or publication is authorized by this spec.
 
 ## Test Plan
 
 This root-repo feature uses slice-owned test targets and slice-specific verification commands instead of feature-wide `[@test]` references, because the canonical planner propagates every feature-wide linked test to every slice in the same repo.
 
-- `opencode-resource-pools` owns `flowctl/tests/test_agent_resources.py` and runs only that prospective resource test target for focused verification.
+- `opencode-resource-pools` owns `flowctl/tests/test_agent_resources.py` and `flowctl/tests/test_agent_process_execution.py` and runs only those prospective resource/harness test targets for focused verification.
 - `patch-unit-execution-policy` owns `flowctl/tests/test_coding_execution_policy.py` and runs only that prospective policy test target for focused verification.
 - `portable-coding-playbook` owns no Python test target; its focused verification is the canonical skill registry validation and deterministic sync dry-run declared by its slice evidence contract.
 - `full-run-validation` owns no implementation test target and inherits no prospective linked tests from earlier slices; it records the source slice's integrated verification as cross-spec execution evidence without acquiring ownership of those tests.
 
-The two prospective test targets are required outputs of their respective owning implementation slices. Each must exist before its owning slice is verified; absence is a failure, not a reason to broaden test discovery or ownership.
+The two prospective test targets owned by `opencode-resource-pools` and the one owned by `patch-unit-execution-policy` are required outputs of their respective owning implementation slices. Each must exist before its owning slice is verified; absence is a failure, not a reason to broaden test discovery or ownership.
 
 ## Verification Matrix
 
@@ -378,10 +451,10 @@ The two prospective test targets are required outputs of their respective owning
 
 - name: executor-resource-tests
   level: integration
-  command: python3 ./flow workspace exec -- python3 -m pytest flowctl/tests/test_agent_resources.py -q
+  command: python3 ./flow workspace exec -- python3 -m pytest flowctl/tests/test_agent_resources.py flowctl/tests/test_agent_process_execution.py -q
   blocking_on: [ci]
   environments: [local]
-  notes: focused verification owned only by opencode-resource-pools; uses fixtures and requires no vendor network credentials or local model runtime
+  notes: focused verification owned only by opencode-resource-pools; proves resource metadata dynamic model resolution process overlay merge and legacy executor selection; uses fixtures and requires no vendor network credentials or local model runtime
 
 - name: patch-unit-policy-tests
   level: integration
@@ -435,6 +508,9 @@ Roll out in dependency order. Resource configuration and diagnostics land first;
 
 - Stop and refine this spec before writing outside declared targets or introducing overlapping slice ownership.
 - Stop if implementation requires model/provider branching or generic model flags in Core/adapters.
+- Stop if Free/Go execution still routes through `opencode-softos` / `softos-local-worker` unless the selected cloud candidate is intentionally Bonsai.
+- Stop if resolved Free/Go models affect diagnostics only and do not reach the spawned OpenCode process.
+- Stop if `execute_subprocess()` replaces the inherited environment wholesale or serializes credentials/auth payloads into overlay or evidence.
 - Stop if OpenCode's current repository-supported config cannot portably own the worker/profile; do not silently fall back to `~/.config` as canonical.
 - Stop if free/Go model discovery cannot be tested through an injectable boundary without network/credentials.
 - Stop if Go authentication cannot be distinguished from provider/model availability using existing OpenCode evidence; retain `AUTH_UNCONFIGURED` rather than inventing a contract.
@@ -442,4 +518,4 @@ Roll out in dependency order. Resource configuration and diagnostics land first;
 - Stop if policy enforcement requires durable scheduling, leases, failover, or a run database; defer that scope.
 - Stop the full run if the approved source slice changes, a preserved worktree would be used, local Bonsai never executes, ownership is violated, focused/integrated verification fails beyond bounded repair, or an independent eligible reviewer is unavailable.
 - Stop the full run if the V1 validation/evidence worktree and cross-spec execution worktree are not distinct, either worktree crosses its governing ownership boundary, or hashes for either governing spec/plan context cannot be recorded.
-- Stop planning until a human approves this draft through the canonical spec gate; the planner must not self-approve.
+- Stop planning until a human re-approves this draft through the canonical spec gate; the planner must not self-approve.
