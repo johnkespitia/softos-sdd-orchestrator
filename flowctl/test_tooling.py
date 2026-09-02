@@ -125,3 +125,102 @@ def test_command_repo_exec_uses_explicit_workdir_for_worktree(tmp_path: Path) ->
 
     assert rc == 0
     assert calls == [("compose", ["exec", "php-api", "/workspace/api-demo-main", "vendor/bin/phpunit"], None)]
+
+
+def test_command_repo_exec_missing_command_raises_system_exit() -> None:
+    """Test that missing command after -- raises SystemExit."""
+    with pytest.raises(SystemExit, match="Debes indicar un comando despues de `--`"):
+        command_repo_exec(
+            type("Args", (), {"repo": "api", "workdir": "", "command": []})(),
+            normalize_passthrough=lambda args: args,
+            repo_root=lambda repo: Path("/tmp"),
+            repo_compose_service=lambda repo: "php-api",
+            workspace_service="workspace",
+            running_inside_workspace=lambda: False,
+            runtime_path=lambda path: path,
+            repo_container_workdir=lambda path: "/workspace/test",
+            run_local_tool_at_path=lambda tool_args, cwd: 0,
+            run_compose=lambda args, interactive=None: 0,
+            compose_exec_args=lambda service_name, interactive=False, workdir=None: ["exec"],
+        )
+
+
+def test_command_repo_exec_missing_repo_raises_system_exit() -> None:
+    """Test that missing repo raises SystemExit."""
+    with pytest.raises(SystemExit, match="Debes indicar un repo"):
+        command_repo_exec(
+            type("Args", (), {"repo": "", "workdir": "", "command": ["--", "phpunit"]})(),
+            normalize_passthrough=lambda args: args[1:] if args and args[0] == "--" else args,
+            repo_root=lambda repo: Path("/tmp"),
+            repo_compose_service=lambda repo: "php-api",
+            workspace_service="workspace",
+            running_inside_workspace=lambda: False,
+            runtime_path=lambda path: path,
+            repo_container_workdir=lambda path: "/workspace/test",
+            run_local_tool_at_path=lambda tool_args, cwd: 0,
+            run_compose=lambda args, interactive=None: 0,
+            compose_exec_args=lambda service_name, interactive=False, workdir=None: ["exec"],
+        )
+
+
+def test_command_repo_exec_unmapped_worktree_raises_system_exit() -> None:
+    """Test that unmappable/invalid workdir raises SystemExit before run_local_tool_at_path or run_compose."""
+    with pytest.raises(SystemExit, match="No pude resolver el workdir"):
+        command_repo_exec(
+            type("Args", (), {"repo": "api", "workdir": "/nonexistent/path/xyz", "command": ["--", "phpunit"]})(),
+            normalize_passthrough=lambda args: args[1:] if args and args[0] == "--" else args,
+            repo_root=lambda repo: Path("/tmp/projects/api"),
+            repo_compose_service=lambda repo: "php-api",
+            workspace_service="workspace",
+            running_inside_workspace=lambda: False,
+            runtime_path=lambda path: path,
+            repo_container_workdir=lambda path: None,  # Simulate unmapped worktree
+            run_local_tool_at_path=lambda tool_args, cwd: 0,
+            run_compose=lambda args, interactive=None: 0,
+            compose_exec_args=lambda service_name, interactive=False, workdir=None: ["exec"],
+        )
+
+
+def test_command_repo_exec_delegation_failure_propagates_return_code() -> None:
+    calls: list[tuple[str, list[str], Path | None]] = []
+
+    rc = command_repo_exec(
+        type("Args", (), {"repo": "api", "workdir": "", "command": ["--", "vendor/bin/phpunit"]})(),
+        normalize_passthrough=lambda args: args[1:] if args and args[0] == "--" else args,
+        repo_root=lambda repo: Path("/tmp/projects/api"),
+        repo_compose_service=lambda repo: "php-api",
+        workspace_service="workspace",
+        running_inside_workspace=lambda: False,
+        runtime_path=lambda path: path,
+        repo_container_workdir=lambda path: "/workspace/test",
+        run_local_tool_at_path=lambda tool_args, cwd: 0,
+        run_compose=lambda args, interactive=None: calls.append(("compose", args, None)) or 1,
+        compose_exec_args=lambda service_name, interactive=False, workdir=None: ["exec"],
+    )
+
+    assert rc == 1
+    assert calls[0][0] == "compose"
+
+
+def test_command_repo_exec_host_only_compose_called() -> None:
+    """Test that on host delegation invokes only compose, never local."""
+    calls: list[tuple[str, list[str], Path | None]] = []
+
+    rc = command_repo_exec(
+        type("Args", (), {"repo": "api", "workdir": "", "command": ["--", "vendor/bin/phpunit"]})(),
+        normalize_passthrough=lambda args: args[1:] if args and args[0] == "--" else args,
+        repo_root=lambda repo: Path("/tmp/projects/api"),
+        repo_compose_service=lambda repo: "php-api",
+        workspace_service="workspace",
+        running_inside_workspace=lambda: False,
+        runtime_path=lambda path: path,
+        repo_container_workdir=lambda path: "/workspace/test",
+        run_local_tool_at_path=lambda tool_args, cwd: 0,
+        run_compose=lambda args, interactive=None: calls.append(("compose", args, None)) or 0,
+        compose_exec_args=lambda service_name, interactive=False, workdir=None: ["exec"],
+    )
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0][0] == "compose"
+    assert not any(call[0] == "local" for call in calls)

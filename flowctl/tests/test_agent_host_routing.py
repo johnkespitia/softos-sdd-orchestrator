@@ -88,6 +88,62 @@ class AgentHostRoutingTests(unittest.TestCase):
         self.assertNotEqual(0, completed.returncode)
         self.assertIn(HOST_EXECUTION_BLOCK_MESSAGE, completed.stderr)
 
+    def test_repo_exec_allowed_on_host(self) -> None:
+        """Test that repo exec subcommand is explicitly allowed on host."""
+        enforce_workspace_only_host(
+            ["repo", "exec", "api", "--", "vendor/bin/phpunit"],
+            running_inside_workspace=False,
+            force_workspace_exec=True,
+            skip_delegation=False,
+            github_actions=False,
+        )
+
+    def test_repo_ci_blocked_on_host(self) -> None:
+        """Test that repo ci subcommand is blocked on host."""
+        with self.assertRaises(SystemExit) as ctx:
+            enforce_workspace_only_host(
+                ["repo", "ci", "spec", "--all"],
+                running_inside_workspace=False,
+                force_workspace_exec=True,
+                skip_delegation=False,
+                github_actions=False,
+            )
+        self.assertIn(HOST_EXECUTION_BLOCK_MESSAGE, str(ctx.exception))
+
+    def test_repo_init_blocked_on_host(self) -> None:
+        """Test that repo init subcommand is blocked on host."""
+        with self.assertRaises(SystemExit) as ctx:
+            enforce_workspace_only_host(
+                ["repo", "init", "api"],
+                running_inside_workspace=False,
+                force_workspace_exec=True,
+                skip_delegation=False,
+                github_actions=False,
+            )
+        self.assertIn(HOST_EXECUTION_BLOCK_MESSAGE, str(ctx.exception))
+
+    def test_repo_unknown_blocked_on_host(self) -> None:
+        """Test that unknown repo subcommands are blocked on host."""
+        with self.assertRaises(SystemExit) as ctx:
+            enforce_workspace_only_host(
+                ["repo", "unknown", "--help"],
+                running_inside_workspace=False,
+                force_workspace_exec=True,
+                skip_delegation=False,
+                github_actions=False,
+            )
+        self.assertIn(HOST_EXECUTION_BLOCK_MESSAGE, str(ctx.exception))
+
+    def test_repo_exec_with_worktree_path(self) -> None:
+        """Test that repo exec with explicit worktree path passes enforcement."""
+        enforce_workspace_only_host(
+            ["repo", "exec", "api", "--workdir", "/some/worktree/path"],
+            running_inside_workspace=False,
+            force_workspace_exec=True,
+            skip_delegation=False,
+            github_actions=False,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
