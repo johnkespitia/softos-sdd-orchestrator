@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Callable, Optional
+
+from flowctl.specs import frontmatter_status_allows_execution
 
 
 NON_SPEC_DRIFT_ROOT_PREFIXES = (
@@ -36,6 +39,113 @@ def is_non_spec_drift_change(repo: str, root_repo: str, path: str) -> bool:
     return False
 
 
+def _is_spec_relative_path(path: str) -> bool:
+    normalized = str(path).strip().replace("\\", "/")
+    return bool(normalized) and normalized.endswith(".spec.md") and "specs/" in normalized
+
+
+def path_exists_in_head(root: Path, repo_relative_path: str) -> bool:
+    normalized = str(repo_relative_path).strip().replace("\\", "/").lstrip("/")
+    if not normalized:
+        return False
+    result = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"HEAD:{normalized}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _covered_sensitive_changes(
+    analysis: dict[str, object],
+    *,
+    root_repo: str,
+    relevant_changed_repo_files: dict[str, list[str]],
+    relevant_changed_root_files: list[str],
+    matches_any_pattern: Callable[[str, list[str]], bool],
+) -> list[str]:
+    covered_changes: list[str] = []
+    target_index = analysis.get("target_index", {})
+    if not isinstance(target_index, dict):
+        return covered_changes
+
+    for repo, paths in relevant_changed_repo_files.items():
+        covered_patterns = [item["relative"] for item in target_index.get(repo, []) if isinstance(item, dict)]
+        for path in paths:
+            if covered_patterns and matches_any_pattern(path, covered_patterns):
+                covered_changes.append(f"{repo}:{path}")
+
+    root_patterns = [item["relative"] for item in target_index.get(root_repo, []) if isinstance(item, dict)]
+    for path in relevant_changed_root_files:
+        if root_patterns and matches_any_pattern(path, root_patterns):
+            covered_changes.append(f"{root_repo}:{path}")
+    return sorted(dict.fromkeys(covered_changes))
+
+
+def _resolve_staged_approved_spec_fallback(
+    *,
+    select_spec_paths,
+    args,
+    root: Path,
+    root_repo: str,
+    staged_spec_relative_paths: set[str],
+    unstaged_root_files: list[str],
+    analyze_spec,
+    relevant_changed_repo_files: dict[str, list[str]],
+    relevant_changed_root_files: list[str],
+    matches_any_pattern: Callable[[str, list[str]], bool],
+    rel: Callable[[Path], str],
+    sensitive_changes: list[str],
+    path_exists_in_head_fn: Callable[[Path, str], bool] | None = None,
+) -> tuple[list[Path], list[str]]:
+    exists_in_head = path_exists_in_head_fn or path_exists_in_head
+    unstaged_spec_relative_paths = {
+        path.replace("\\", "/")
+        for path in unstaged_root_files
+        if _is_spec_relative_path(path)
+    }
+    candidate_specs = select_spec_paths(
+        getattr(args, "spec", None),
+        all_specs=True,
+        changed=False,
+        base=getattr(args, "base", None),
+        head=getattr(args, "head", None),
+    )
+    qualifying: list[Path] = []
+    for candidate in candidate_specs:
+        candidate_rel = rel(candidate).replace("\\", "/")
+        if candidate_rel in staged_spec_relative_paths:
+            continue
+        if candidate_rel in unstaged_spec_relative_paths:
+            continue
+        if not exists_in_head(root, candidate_rel):
+            continue
+        analysis = analyze_spec(candidate)
+        frontmatter = analysis.get("frontmatter", {})
+        status = frontmatter.get("status") if isinstance(frontmatter, dict) else None
+        if not frontmatter_status_allows_execution(status):
+            continue
+        covered_changes = _covered_sensitive_changes(
+            analysis,
+            root_repo=root_repo,
+            relevant_changed_repo_files=relevant_changed_repo_files,
+            relevant_changed_root_files=relevant_changed_root_files,
+            matches_any_pattern=matches_any_pattern,
+        )
+        if set(covered_changes) == set(sensitive_changes):
+            qualifying.append(candidate)
+
+    if len(qualifying) == 1:
+        return qualifying, []
+    if len(qualifying) > 1:
+        return [], [
+            "Ambiguedad: multiples specs aprobadas cubren los cambios staged: "
+            + ", ".join(sorted(rel(spec_path).replace("\\", "/") for spec_path in qualifying))
+        ]
+    return [], []
+
+
 def evaluate_stable_surface_guard(
     args,
     *,
@@ -51,6 +161,7 @@ def evaluate_stable_surface_guard(
     matches_any_pattern: Callable[[str, list[str]], bool],
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
+    path_exists_in_head_fn: Callable[[Path, str], bool] | None = None,
 ) -> dict[str, object]:
     staged = bool(getattr(args, "staged", False))
     changed = bool(getattr(args, "changed", False))
@@ -58,10 +169,16 @@ def evaluate_stable_surface_guard(
     if staged and changed:
         raise SystemExit("Usa `--staged` o `--changed`, no ambos.")
 
+    staged_spec_relative_paths: set[str] = set()
     if staged:
         root_spec_files, error = staged_repo_files_fn(root)
         if error:
             raise SystemExit(f"No pude resolver specs staged: {error}")
+        staged_spec_relative_paths = {
+            relative_path.replace("\\", "/")
+            for relative_path in root_spec_files
+            if _is_spec_relative_path(relative_path)
+        }
         spec_paths = [
             candidate.resolve()
             for relative_path in root_spec_files
@@ -121,22 +238,38 @@ def evaluate_stable_surface_guard(
 
     items: list[dict[str, object]] = []
     findings: list[str] = []
+    fallback_findings: list[str] = []
+
+    if staged and sensitive_changes and not spec_paths:
+        unstaged_root_files, unstaged_error = git_diff_name_only(root)
+        if unstaged_error:
+            raise SystemExit(f"No pude resolver cambios unstaged del root: {unstaged_error}")
+        spec_paths, fallback_findings = _resolve_staged_approved_spec_fallback(
+            select_spec_paths=select_spec_paths,
+            args=args,
+            root=root,
+            root_repo=root_repo,
+            staged_spec_relative_paths=staged_spec_relative_paths,
+            unstaged_root_files=unstaged_root_files,
+            analyze_spec=analyze_spec,
+            relevant_changed_repo_files=relevant_changed_repo_files,
+            relevant_changed_root_files=relevant_changed_root_files,
+            matches_any_pattern=matches_any_pattern,
+            rel=rel,
+            sensitive_changes=sensitive_changes,
+            path_exists_in_head_fn=path_exists_in_head_fn,
+        )
 
     for spec_path in spec_paths:
         analysis = analyze_spec(spec_path)
         spec_findings: list[str] = []
-        covered_changes: list[str] = []
-
-        for repo, paths in relevant_changed_repo_files.items():
-            covered_patterns = [item["relative"] for item in analysis["target_index"].get(repo, [])]
-            for path in paths:
-                if covered_patterns and matches_any_pattern(path, covered_patterns):
-                    covered_changes.append(f"{repo}:{path}")
-
-        root_patterns = [item["relative"] for item in analysis["target_index"].get(root_repo, [])]
-        for path in relevant_changed_root_files:
-            if root_patterns and matches_any_pattern(path, root_patterns):
-                covered_changes.append(f"{root_repo}:{path}")
+        covered_changes = _covered_sensitive_changes(
+            analysis,
+            root_repo=root_repo,
+            relevant_changed_repo_files=relevant_changed_repo_files,
+            relevant_changed_root_files=relevant_changed_root_files,
+            matches_any_pattern=matches_any_pattern,
+        )
 
         if sensitive_changes and not covered_changes:
             spec_findings.append("La spec seleccionada no cubre cambios detectados en superficies estables.")
@@ -151,7 +284,9 @@ def evaluate_stable_surface_guard(
         )
         findings.extend(f"{rel(spec_path)}: {finding}" for finding in spec_findings)
 
-    if sensitive_changes and not spec_paths:
+    if fallback_findings:
+        findings.extend(fallback_findings)
+    elif sensitive_changes and not spec_paths:
         findings.append(
             "Se detectaron cambios en superficies estables sin cambios de spec: " + ", ".join(sorted(sensitive_changes))
         )
@@ -187,6 +322,7 @@ def command_spec_guard(
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
     json_dumps: Callable[[object], str],
+    path_exists_in_head_fn: Callable[[Path, str], bool] | None = None,
 ) -> int:
     require_dirs()
     payload = evaluate_stable_surface_guard(
@@ -203,6 +339,7 @@ def command_spec_guard(
         matches_any_pattern=matches_any_pattern,
         rel=rel,
         utc_now=utc_now,
+        path_exists_in_head_fn=path_exists_in_head_fn,
     )
     if bool(getattr(args, "json", False)):
         print(json_dumps(payload))
