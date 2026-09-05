@@ -242,6 +242,9 @@ def host_execution_allowed(raw_args: list[str]) -> bool:
         return True
     if top_level == "workspace" and len(raw_args) > 1 and raw_args[1] == "exec":
         return True
+    # Allow only repo exec (not other repo subcommands like repo ci, repo init, etc.)
+    if top_level == "repo" and len(raw_args) > 1 and raw_args[1] == "exec":
+        return True
     return False
 
 
