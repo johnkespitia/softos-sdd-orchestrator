@@ -23,18 +23,14 @@ stack_capabilities: []
 targets:
   - ../../workspace.config.json
   - ../../opencode.json
-  - ../../flowctl/agent_resources.py
-  - ../../flowctl/agent_executors.py
-  - ../../flowctl/agent_process_execution.py
-  - ../../flowctl/tests/test_agent_resources.py
-  - ../../flowctl/tests/test_agent_process_execution.py
-  - ../../docs/opencode-execution-resources.md
-  - ../../policies/coding-execution-runtime-v1.json
-  - ../../flowctl/coding_execution_policy.py
-  - ../../flowctl/tests/test_coding_execution_policy.py
-  - ../../.agents/skills/softos-coding-execution-supervisor/**
+  - ../../flowctl/agent_*.py
+  - ../../flowctl/tests/test_agent_*.py
+  - ../../policies/**
+  - ../../flowctl/*policy*.py
+  - ../../flowctl/test_*policy*.py
+  - ../../.agents/skills/**
   - ../../workspace.skills.json
-  - ../../docs/coding-execution-runtime-v1-full-run.md
+  - ../../docs/**
 ---
 
 # Coding Execution Runtime V1
@@ -67,7 +63,7 @@ flow agent run
 
 Observed defect: `opencode-free` and `opencode-go` referenced the local executor, which launches the repository-owned local worker/profile. `resolve_free_model()` / `resolve_go_model()` affected diagnostics only; `execute_subprocess()` had no resource-specific environment overlay path. The cloud resources therefore risked inheriting local worker/profile configuration instead of their independently resolved configuration.
 
-This refinement returns the spec to `draft`. Prior approval and any generated plan are no longer authoritative. Human re-approval is required before planning or further implementation resumes.
+The S1 refinement initially returned this spec to `draft` and invalidated the prior approval. The refined version was subsequently reviewed and human re-approved through the canonical spec gate. Planning and execution are allowed only when that gate reports the current spec version as `approved`; the planner/supervisor must never self-approve.
 
 ## Context and existing conventions
 
@@ -105,6 +101,19 @@ SoftOS can invoke host-native executors but cannot yet describe logical OpenCode
 - Routing supervision/orchestration to local models by default.
 - Modifying or consuming the preserved historical worktrees `host-repo-exec-routing-alignment-host-repo-exec-routing` and `orchestration-v0-spike-render-status-fixture`.
 - Implementing `git-scope-ignore-hygiene` during spec, planning, or review of this feature.
+
+## Expected / prospective outputs
+
+Top-level `targets` are existing ownership surfaces and must resolve during governance checks. The exact paths below are required implementation outputs, not placeholders: they may not exist at spec-approval time, but each MUST exist before its owning slice can pass focused verification or completion. They remain bounded by the declared top-level ownership surfaces. Exact future-path ownership is disjoint between slices even where the current target schema must use a broader existing glob.
+
+| Owning slice | Required outputs |
+| --- | --- |
+| `opencode-resource-pools` | `workspace.config.json`; `opencode.json`; `flowctl/agent_resources.py`; `flowctl/agent_executors.py`; `flowctl/agent_process_execution.py`; `flowctl/tests/test_agent_resources.py`; `flowctl/tests/test_agent_process_execution.py`; `docs/opencode-execution-resources.md` |
+| `patch-unit-execution-policy` | `policies/coding-execution-runtime-v1.json`; `flowctl/coding_execution_policy.py`; `flowctl/tests/test_coding_execution_policy.py` |
+| `portable-coding-playbook` | `.agents/skills/softos-coding-execution-supervisor/**`; `workspace.skills.json` |
+| `full-run-validation` | `docs/coding-execution-runtime-v1-full-run.md` |
+
+The current parser requires every schema slice target to be an exact top-level target and has no prospective-target field. Consequently, its existing glob surfaces cannot express exact future-file ownership without overlap. The table above is the binding exact-output contract for creation, focused verification, completion, and cross-slice ownership; schema targets below remain the narrowest currently resolvable routing surfaces.
 
 ## Architecture boundaries
 
@@ -318,12 +327,8 @@ If the selected local resource is unavailable before any local Patch Unit can ru
   targets:
     - ../../workspace.config.json
     - ../../opencode.json
-    - ../../flowctl/agent_resources.py
-    - ../../flowctl/agent_executors.py
-    - ../../flowctl/agent_process_execution.py
-    - ../../flowctl/tests/test_agent_resources.py
-    - ../../flowctl/tests/test_agent_process_execution.py
-    - ../../docs/opencode-execution-resources.md
+    - ../../flowctl/agent_*.py
+    - ../../flowctl/tests/test_agent_*.py
   hot_area: portable OpenCode resource registry profile resolution diagnostics and harness process overlay
   depends_on: []
   execution_difficulty: high
@@ -348,9 +353,9 @@ If the selected local resource is unavailable before any local Patch Unit can ru
 - name: patch-unit-execution-policy
   repo: sdd-workspace-boilerplate
   targets:
-    - ../../policies/coding-execution-runtime-v1.json
-    - ../../flowctl/coding_execution_policy.py
-    - ../../flowctl/tests/test_coding_execution_policy.py
+    - ../../policies/**
+    - ../../flowctl/*policy*.py
+    - ../../flowctl/test_*policy*.py
   hot_area: Patch Unit decomposition capability filtering resource priority and bounded failure policy
   depends_on:
     - opencode-resource-pools
@@ -371,7 +376,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
 - name: portable-coding-playbook
   repo: sdd-workspace-boilerplate
   targets:
-    - ../../.agents/skills/softos-coding-execution-supervisor/**
+    - ../../.agents/skills/**
     - ../../workspace.skills.json
   hot_area: reusable supervisor skill and portable registration
   depends_on:
@@ -392,7 +397,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
 - name: full-run-validation
   repo: sdd-workspace-boilerplate
   targets:
-    - ../../docs/coding-execution-runtime-v1-full-run.md
+    - ../../docs/**
   hot_area: real git-scope-ignore-hygiene execution protocol and evidence package
   depends_on:
     - opencode-resource-pools
@@ -418,7 +423,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
 
 ## Target ownership summary
 
-Slice target sets are pairwise disjoint. The spec itself remains orchestrator-owned and is not a slice write target. `opencode-resource-pools` owns the resource registry, harness selection/overlay boundary (`agent_executors.py`, `agent_process_execution.py`), and their focused tests. `full-run-validation` owns only its canonical protocol/evidence document in the V1 validation/evidence worktree. Implementation changes for `git-scope-ignore-hygiene` occur only in a separate cross-spec execution worktree, remain governed exclusively by the already-approved `deterministic-repository-verification-hardening` source spec/plan, and retain that slice's ownership of `flowctl/gittools.py` and `flowctl/test_release_scope_drift.py`.
+The parser-level target surfaces are existing globs required by current drift governance; they are not sufficient by themselves to express the exact future-file partition. The `Expected / prospective outputs` table is the binding pairwise-disjoint ownership contract for those paths. The spec itself remains orchestrator-owned and is not a slice write target. `opencode-resource-pools` owns the resource registry, harness selection/overlay boundary (`agent_executors.py`, `agent_process_execution.py`), and their focused tests. `full-run-validation` owns only its canonical protocol/evidence document in the V1 validation/evidence worktree. Implementation changes for `git-scope-ignore-hygiene` occur only in a separate cross-spec execution worktree, remain governed exclusively by the already-approved `deterministic-repository-verification-hardening` source spec/plan, and retain that slice's ownership of `flowctl/gittools.py` and `flowctl/test_release_scope_drift.py`.
 
 ## Acceptance criteria
 
@@ -478,7 +483,7 @@ The two prospective test targets owned by `opencode-resource-pools` and the one 
 
 - name: existing-agent-executor-regression
   level: integration
-  command: python3 ./flow workspace exec -- python3 -m pytest flowctl/tests/test_agent_executors.py flowctl/tests/test_agent_executor_adapters.py flowctl/tests/test_agent_process_execution.py -q
+  command: python3 ./flow workspace exec -- python3 -m pytest flowctl/tests/test_agent_executor_adapters.py flowctl/tests/test_agent_process_execution.py -q
   blocking_on: [ci]
   environments: [local]
   notes: proves model-agnostic invocation containment and existing executor behavior remain intact
@@ -531,4 +536,4 @@ Roll out in dependency order. Resource configuration and diagnostics land first;
 - Stop if policy enforcement requires durable scheduling, leases, failover, or a run database; defer that scope.
 - Stop the full run if the approved source slice changes, a preserved worktree would be used, the selected local resource never executes, ownership is violated, focused/integrated verification fails beyond bounded repair, or an independent eligible reviewer is unavailable.
 - Stop the full run if the V1 validation/evidence worktree and cross-spec execution worktree are not distinct, either worktree crosses its governing ownership boundary, or hashes for either governing spec/plan context cannot be recorded.
-- Stop planning until a human re-approves this draft through the canonical spec gate; the planner must not self-approve.
+- Stop planning or execution if the current spec version is not approved through the canonical spec gate; the planner/supervisor must not self-approve.
