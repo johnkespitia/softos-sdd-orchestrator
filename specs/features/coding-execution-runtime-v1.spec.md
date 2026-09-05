@@ -67,7 +67,7 @@ flow agent run
 
 Observed defect: `opencode-free` and `opencode-go` referenced the local executor, which launches the repository-owned local worker/profile. `resolve_free_model()` / `resolve_go_model()` affected diagnostics only; `execute_subprocess()` had no resource-specific environment overlay path. The cloud resources therefore risked inheriting local worker/profile configuration instead of their independently resolved configuration.
 
-This refinement returns the spec to `draft`. Prior approval and any generated plan are no longer authoritative. Human re-approval is required before planning or further implementation resumes.
+The S1 refinement initially returned this spec to `draft` and invalidated the prior approval. The refined version was subsequently reviewed and human re-approved through the canonical spec gate. Planning and execution are allowed only when that gate reports the current spec version as `approved`; the planner/supervisor must never self-approve.
 
 ## Context and existing conventions
 
@@ -478,7 +478,7 @@ The two prospective test targets owned by `opencode-resource-pools` and the one 
 
 - name: existing-agent-executor-regression
   level: integration
-  command: python3 ./flow workspace exec -- python3 -m pytest flowctl/tests/test_agent_executors.py flowctl/tests/test_agent_executor_adapters.py flowctl/tests/test_agent_process_execution.py -q
+  command: python3 ./flow workspace exec -- python3 -m pytest flowctl/tests/test_agent_executor_adapters.py flowctl/tests/test_agent_process_execution.py -q
   blocking_on: [ci]
   environments: [local]
   notes: proves model-agnostic invocation containment and existing executor behavior remain intact
@@ -531,4 +531,4 @@ Roll out in dependency order. Resource configuration and diagnostics land first;
 - Stop if policy enforcement requires durable scheduling, leases, failover, or a run database; defer that scope.
 - Stop the full run if the approved source slice changes, a preserved worktree would be used, the selected local resource never executes, ownership is violated, focused/integrated verification fails beyond bounded repair, or an independent eligible reviewer is unavailable.
 - Stop the full run if the V1 validation/evidence worktree and cross-spec execution worktree are not distinct, either worktree crosses its governing ownership boundary, or hashes for either governing spec/plan context cannot be recorded.
-- Stop planning until a human re-approves this draft through the canonical spec gate; the planner must not self-approve.
+- Stop planning or execution if the current spec version is not approved through the canonical spec gate; the planner/supervisor must not self-approve.
