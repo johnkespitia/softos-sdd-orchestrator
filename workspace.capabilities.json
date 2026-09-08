@@ -16,6 +16,10 @@
       "enabled": true,
       "source": "capabilities/laravel.capability.json"
     },
+    "laravel8": {
+      "enabled": true,
+      "source": "capabilities/laravel8.capability.json"
+    },
     "nestjs": {
       "enabled": true,
       "source": "capabilities/nestjs.capability.json"

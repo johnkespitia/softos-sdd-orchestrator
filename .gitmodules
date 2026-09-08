@@ -1,0 +1,3 @@
+[submodule "plg-platform-backend"]
+	path = plg-platform-backend
+	url = git@github.com:PLGEducation/plg-platform-backend.git

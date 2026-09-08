@@ -9,6 +9,7 @@ services:
     entrypoint: ["/usr/local/share/flow/workspace-entrypoint.sh"]
     volumes:
       - ..:/workspace:cached
+      - ..:${FLOW_HOST_ROOT:-/workspace-host}:cached
       - /var/run/docker.sock:/var/run/docker.sock
       - workspace-pnpm-store:/home/vscode/.local/share/pnpm/store
     environment:
@@ -27,6 +28,7 @@ services:
     entrypoint: ["/usr/local/share/flow/workspace-entrypoint.sh"]
     volumes:
       - ..:/workspace:cached
+      - ..:${FLOW_HOST_ROOT:-/workspace-host}:cached
       - /var/run/docker.sock:/var/run/docker.sock
     env_file:
       - .env.generated

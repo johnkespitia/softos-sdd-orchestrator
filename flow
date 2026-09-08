@@ -1736,6 +1736,63 @@ def serialize_skill_entry(entry: dict[str, object]) -> dict[str, object]:
     return flow_serialize_skill_entry(entry, rel)
 
 
+def configured_skill_references() -> list[tuple[str, str]]:
+    references: list[tuple[str, str]] = []
+
+    def append_refs(source: str, payload: object) -> None:
+        if not isinstance(payload, dict):
+            return
+        raw_refs = payload.get("agent_skill_refs", [])
+        if not isinstance(raw_refs, list):
+            return
+        for raw_ref in raw_refs:
+            skill_ref = str(raw_ref).strip()
+            if skill_ref:
+                references.append((source, skill_ref))
+
+    def append_registry_refs(registry_file: Path, registry_key: str, entry_name: str, source_label: str) -> None:
+        registry = json.loads(registry_file.read_text(encoding="utf-8"))
+        entry_config = registry.get(registry_key, {}).get(entry_name, {})
+        if not isinstance(entry_config, dict) or not bool(entry_config.get("enabled", True)):
+            return
+        source_path = ROOT / str(entry_config.get("source", "")).strip()
+        if not source_path.is_file():
+            return
+        try:
+            payload = json.loads(source_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        append_refs(f"{source_label} `{entry_name}`", payload)
+
+    workspace = load_workspace_config()
+    repos = workspace.get("repos", {})
+    if not isinstance(repos, dict):
+        return references
+    for repo_name, repo_payload in repos.items():
+        if not isinstance(repo_payload, dict):
+            continue
+        direct_refs = repo_payload.get("agent_skill_refs", [])
+        if isinstance(direct_refs, list) and direct_refs:
+            append_refs(f"repo `{repo_name}`", repo_payload)
+        else:
+            runtime = str(repo_payload.get("runtime", "")).strip()
+            if runtime:
+                append_registry_refs(RUNTIMES_CONFIG_FILE, "runtimes", runtime, "runtime")
+        capabilities = repo_payload.get("capabilities", [])
+        if isinstance(capabilities, list):
+            for capability in capabilities:
+                capability_name = str(capability).strip()
+                if capability_name:
+                    append_registry_refs(
+                        CAPABILITIES_CONFIG_FILE,
+                        "capabilities",
+                        capability_name,
+                        "capability",
+                    )
+
+    return references
+
+
 def command_skills_doctor(args: argparse.Namespace) -> int:
     if not running_inside_workspace() and os.environ.get("FLOW_DELEGATED_TO_WORKSPACE") != "1":
         context = detect_compose_context()
@@ -1762,6 +1819,7 @@ def command_skills_doctor(args: argparse.Namespace) -> int:
         rel=rel,
         skills_config_file=SKILLS_CONFIG_FILE,
         json_dumps=json_dumps,
+        configured_skill_references=configured_skill_references,
     )
 
 

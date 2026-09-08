@@ -1,0 +1,21 @@
+{
+  "title": "Laravel 8 Existing Application",
+  "summary": "Contexto aditivo para aplicaciones Laravel 8 existentes con app root bajo src/.",
+  "required_runtimes": [
+    "php-laravel8-apache"
+  ],
+  "target_roots": [
+    "src/artisan",
+    "src/app",
+    "src/bootstrap",
+    "src/config",
+    "src/database",
+    "src/public",
+    "src/routes",
+    "src/tests"
+  ],
+  "agent_skill_refs": [
+    "workspace/laravel-8"
+  ],
+  "placeholder_files": {}
+}

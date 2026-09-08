@@ -66,6 +66,58 @@ run_check() {
 echo "== SoftOS Environment Preflight =="
 echo "Workspace: $ROOT_DIR"
 
+echo "== Local environment materialization =="
+if PREFLIGHT_CONFIG="$PREFLIGHT_CONFIG" python3 - <<'PY'
+from __future__ import annotations
+
+import base64
+import json
+import os
+import secrets
+import shutil
+from pathlib import Path
+
+root = Path(".").resolve()
+config_path = root / os.environ.get("PREFLIGHT_CONFIG", "workspace.preflight.json")
+config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
+
+for repo_name, repo_config in config.get("repos", {}).items():
+    if not isinstance(repo_config, dict):
+        continue
+    env_file_raw = str(repo_config.get("env_file", "")).strip()
+    template_raw = str(repo_config.get("env_template", "")).strip()
+    if not env_file_raw or not template_raw:
+        continue
+    env_file = (root / env_file_raw).resolve()
+    template = (root / template_raw).resolve()
+    env_file.relative_to(root)
+    template.relative_to(root)
+    if not template.is_file():
+        raise SystemExit(f"{repo_name}: missing env template {template_raw}")
+    if not env_file.exists():
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(template, env_file)
+    if bool(repo_config.get("generate_laravel_app_key", False)):
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+        app_key = "base64:" + base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+        updated = []
+        found = False
+        for line in lines:
+            if line.startswith("APP_KEY="):
+                found = True
+                updated.append(line if line.removeprefix("APP_KEY=").strip() else f"APP_KEY={app_key}")
+            else:
+                updated.append(line)
+        if not found:
+            updated.append(f"APP_KEY={app_key}")
+        env_file.write_text("\n".join(updated) + "\n", encoding="utf-8")
+PY
+then
+  pass "local env files"
+else
+  fail "local env files"
+fi
+
 run_check "flow doctor" python3 ./flow doctor >/dev/null
 run_check "flow stack doctor" python3 ./flow stack doctor >/dev/null
 run_check "flow workflow doctor" python3 ./flow workflow doctor --json >/dev/null
@@ -289,6 +341,21 @@ for repo_name, repo_cfg in implementation_repos:
     environment = service_payload.get("environment")
     env_map = environment if isinstance(environment, dict) else {}
     env_list = environment if isinstance(environment, list) else []
+    env_file_values: dict[str, str] = {}
+    env_file_raw = str(override.get("env_file", "")).strip()
+    if env_file_raw:
+        env_file = (root / env_file_raw).resolve()
+        try:
+            env_file.relative_to(root)
+        except ValueError:
+            errors.append(f"{repo_name}: env_file escapes workspace: {env_file_raw}.")
+        else:
+            if env_file.is_file():
+                for line in env_file.read_text(encoding="utf-8").splitlines():
+                    if not line or line.lstrip().startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    env_file_values[key.strip()] = value.strip()
     for key in required_env_keys:
         key_name = str(key).strip()
         if not key_name:
@@ -296,6 +363,8 @@ for repo_name, repo_cfg in implementation_repos:
         if isinstance(env_map, dict) and key_name in env_map:
             continue
         if isinstance(env_list, list) and any(str(item).startswith(f"{key_name}=") for item in env_list):
+            continue
+        if env_file_values.get(key_name):
             continue
         missing.append(key_name)
     if missing:
@@ -347,11 +416,18 @@ fi
 run_check "flow stack ps" python3 ./flow stack ps >/dev/null
 
 echo "== Runtime app readiness checks =="
-while IFS='|' read -r repo_name runtime service_name repo_path status_cmd migrate_cmd; do
+while IFS='|' read -r repo_name runtime service_name repo_path bootstrap_cmd status_cmd migrate_cmd; do
   [[ -z "$repo_name" ]] && continue
   if [[ -z "$service_name" ]]; then
     warn "$repo_name has no compose_service; skipped runtime readiness."
     continue
+  fi
+  if [[ -n "$bootstrap_cmd" ]]; then
+    if python3 ./flow stack exec "$service_name" -- sh -lc "$bootstrap_cmd" >/dev/null; then
+      pass "runtime bootstrap command for \`$repo_name\`"
+    else
+      fail "runtime bootstrap command for \`$repo_name\`"
+    fi
   fi
   if [[ -n "$status_cmd" ]]; then
     if python3 ./flow stack exec "$service_name" -- sh -lc "$status_cmd" >/dev/null; then
@@ -370,7 +446,7 @@ while IFS='|' read -r repo_name runtime service_name repo_path status_cmd migrat
     fi
   fi
   case "$runtime" in
-    php)
+    php|php-*)
       if python3 ./flow stack exec "$service_name" -- php -v >/dev/null; then
         pass "php runtime check for \`$repo_name\`"
       else
@@ -426,9 +502,10 @@ for repo_name, repo_cfg in cfg.get("repos", {}).items():
     service = str(repo_cfg.get("compose_service", "")).strip()
     path = str((root / str(repo_cfg.get("path", "")).strip()).resolve())
     override = repo_overrides.get(repo_name, {}) if isinstance(repo_overrides, dict) else {}
+    bootstrap_cmd = str(override.get("bootstrap_cmd", "")).strip().replace("|", " ")
     status_cmd = str(override.get("readiness_status_cmd", "")).strip().replace("|", " ")
     migrate_cmd = str(override.get("migration_apply_cmd", "")).strip().replace("|", " ")
-    print(f"{repo_name}|{runtime}|{service}|{path}|{status_cmd}|{migrate_cmd}")
+    print(f"{repo_name}|{runtime}|{service}|{path}|{bootstrap_cmd}|{status_cmd}|{migrate_cmd}")
 PY
 )
 

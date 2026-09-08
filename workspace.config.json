@@ -35,6 +35,7 @@
         "runtimes",
         "workspace.capabilities.json",
         "workspace.config.json",
+        "workspace.preflight.json",
         "workspace.providers.json",
         "workspace.runtimes.json",
         "workspace.secrets.json",
@@ -56,6 +57,79 @@
         "../../profiles/**/*.json"
       ],
       "runtime": "python"
+    },
+    "plg-platform-backend": {
+      "path": "plg-platform-backend",
+      "compose_service": "web-server",
+      "compose_file": "plg-platform-backend/docker-compose.yaml",
+      "kind": "implementation",
+      "runtime": "php-laravel8-apache",
+      "capabilities": [
+        "laravel8"
+      ],
+      "repo_strategy": "submodule",
+      "slice_prefix": "plg-platform-backend",
+      "default_targets": [
+        "../../plg-platform-backend/src/**"
+      ],
+      "target_roots": [
+        ".github",
+        "AGENTS.md",
+        "Makefile",
+        "docker-compose.yaml",
+        "php.Dockerfile",
+        ".env.example",
+        "config",
+        "src",
+        "src/tests"
+      ],
+      "contract_roots": [
+        ".github",
+        "AGENTS.md",
+        "Makefile",
+        "docker-compose.yaml",
+        "php.Dockerfile",
+        ".env.example",
+        "config",
+        "src",
+        "src/tests"
+      ],
+      "test_required_roots": [
+        "src"
+      ],
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/php-core",
+        "workspace/laravel-8"
+      ],
+      "test_runner": "php",
+      "test_hint": "../../plg-platform-backend/src/tests",
+      "ci": {
+        "mode": "workflow-dispatch",
+        "workflow": "repo-ci.yml",
+        "workflow_repository": "PLGEducation/plg-platform-backend",
+        "trigger_mode": "workflow_dispatch_only",
+        "install": [
+          "composer",
+          "--working-dir=src",
+          "install",
+          "--no-interaction",
+          "--prefer-dist"
+        ],
+        "test": [
+          "php",
+          "-d",
+          "memory_limit=512M",
+          "src/vendor/bin/phpunit",
+          "-c",
+          "src/phpunit.xml"
+        ]
+      }
     }
   },
   "memory": {

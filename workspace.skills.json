@@ -77,6 +77,36 @@
       "required": true,
       "sync": false,
       "notes": "Tile local ya vendorizado y gobernado por tessl.json."
+    },
+    {
+      "name": "workspace/python-core",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/python-core",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "requires": []
+    },
+    {
+      "name": "workspace/php-core",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/php-core",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contrato tecnico local para PHP y Composer en repos SoftOS."
+    },
+    {
+      "name": "workspace/laravel-8",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/laravel-8",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contexto tecnico local para mantener la aplicacion Laravel 8 existente sin upgrades implicitos."
     }
   ]
 }
