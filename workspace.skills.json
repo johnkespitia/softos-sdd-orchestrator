@@ -1,0 +1,82 @@
+{
+  "providers": {
+    "tessl": {
+      "enabled": true
+    },
+    "skills-sh": {
+      "enabled": true
+    }
+  },
+  "entries": [
+    {
+      "name": "workspace/softos-spec-definition-playbook",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-spec-definition-playbook",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Playbook local para crear, revisar y endurecer specs SoftOS listas para slicing y ejecucion."
+    },
+    {
+      "name": "workspace/softos-reference-spec-hardening",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-reference-spec-hardening",
+      "enabled": true,
+      "required": false,
+      "sync": false,
+      "notes": "Segunda pasada de endurecimiento para convertir specs implementation-ready en reference-grade con minima inferencia para agentes."
+    },
+    {
+      "name": "workspace/softos-schema-hardening-gates",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-schema-hardening-gates",
+      "enabled": true,
+      "required": false,
+      "sync": false,
+      "notes": "Playbook para separar materializacion, backfill, readiness gate y activacion final de hardening de schema sensible a datos."
+    },
+    {
+      "name": "workspace/softos-staging-promote-preflight",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-staging-promote-preflight",
+      "enabled": true,
+      "required": false,
+      "sync": false,
+      "notes": "Preflight binario para decidir si una promocion a staging es realmente despachable desde el runtime workspace."
+    },
+    {
+      "name": "workspace/softos-worktree-hygiene",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-worktree-hygiene",
+      "enabled": true,
+      "required": false,
+      "sync": false,
+      "notes": "Skill local para inventariar, preservar y limpiar worktrees operativas al cierre de una ejecucion SoftOS."
+    },
+    {
+      "name": "workspace/skills-discover",
+      "provider": "tessl",
+      "kind": "tile",
+      "source": ".tessl/tiles/workspace/skills-discover",
+      "enabled": true,
+      "required": false,
+      "sync": false,
+      "notes": "Skill preconfigurado para descubrir e instalar skills en tessl.io y skills.sh."
+    },
+    {
+      "name": "workspace/spec-driven-workspace",
+      "provider": "tessl",
+      "kind": "tile",
+      "source": ".tessl/tiles/workspace/spec-driven-workspace",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Tile local ya vendorizado y gobernado por tessl.json."
+    }
+  ]
+}

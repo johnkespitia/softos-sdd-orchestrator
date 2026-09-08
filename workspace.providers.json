@@ -1,0 +1,138 @@
+{
+  "release": {
+    "default_provider": "local-hooks",
+    "providers": {
+      "local-hooks": {
+        "enabled": true,
+        "entrypoint": "scripts/providers/release/local_hooks.sh",
+        "requires": []
+      },
+      "github-actions": {
+        "enabled": false,
+        "entrypoint": "scripts/providers/release/github_actions.sh",
+        "requires": [
+          "gh"
+        ],
+        "contract": {
+          "requires_source_ref": true,
+          "requires_target_ref": true,
+          "supports_pr_promotion": true,
+          "requires_post_deploy_verify": true,
+          "verify_mode": "healthcheck"
+        },
+        "env": {
+          "FLOW_GITHUB_RELEASE_WORKFLOW": "release-promote.yml",
+          "FLOW_DEPLOY_GITHUB_REF": "main"
+        }
+      },
+      "ftp-bridge": {
+        "enabled": false,
+        "entrypoint": "scripts/providers/release/ftp_bridge.sh",
+        "requires": [
+          "gh"
+        ]
+      }
+    }
+  },
+  "infra": {
+    "default_provider": "local-hooks",
+    "providers": {
+      "local-hooks": {
+        "enabled": true,
+        "entrypoint": "scripts/providers/infra/local_hooks.sh",
+        "requires": []
+      },
+      "terraform-cli": {
+        "enabled": false,
+        "entrypoint": "scripts/providers/infra/terraform_cli.sh",
+        "requires": [
+          "terraform"
+        ]
+      }
+    }
+  },
+  "gateway": {
+    "jira": {
+      "acceptance_criteria_field": "customfield_softos_acceptance"
+    }
+  },
+  "feedback": {
+    "default_provider": "local-log",
+    "retry_policy": {
+      "max_attempts": 4,
+      "initial_delay_s": 0.5,
+      "max_delay_s": 8.0,
+      "backoff_multiplier": 2.0
+    },
+    "providers": {
+      "local-log": {
+        "enabled": true,
+        "entrypoint": "scripts/providers/feedback/local_log.sh",
+        "requires": []
+      },
+      "slack-webhook": {
+        "enabled": true,
+        "entrypoint": "scripts/providers/feedback/slack_webhook.sh",
+        "requires": [
+          "curl"
+        ]
+      },
+      "github-comment": {
+        "enabled": true,
+        "entrypoint": "scripts/providers/feedback/github_comment.sh",
+        "requires": [
+          "curl"
+        ]
+      },
+      "jira-comment": {
+        "enabled": true,
+        "entrypoint": "scripts/providers/feedback/jira_comment.sh",
+        "requires": [
+          "curl"
+        ]
+      }
+    }
+  },
+  "examples": {
+    "release_github_actions": {
+      "repo_workspace_config": {
+        "deploy": {
+          "provider": "github-actions",
+          "providers_by_env": {
+            "staging": "github-actions",
+            "production": "github-actions"
+          },
+          "promotion_strategy": {
+            "mode": "pull_request"
+          },
+          "contract": {
+            "deploy_requires_pr": true,
+            "deploy_requires_healthcheck": true,
+            "post_deploy_smoke_required": true
+          },
+          "verify": {
+            "mode": "healthcheck",
+            "retry": {
+              "attempts": 4,
+              "backoff_seconds": 5
+            }
+          },
+          "env": {
+            "FLOW_DEPLOY_GITHUB_REPO": "acme/example-app",
+            "FLOW_DEPLOY_GITHUB_WORKFLOW": "promotion-pr.yml",
+            "FLOW_DEPLOY_GITHUB_REF": "main"
+          },
+          "env_by_env": {
+            "staging": {
+              "FLOW_DEPLOY_SOURCE_REF": "main",
+              "FLOW_DEPLOY_RUN_MIGRATIONS": "true"
+            },
+            "production": {
+              "FLOW_DEPLOY_SOURCE_REF": "staging"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "engram": {
+      "command": "engram",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "ENGRAM_PROJECT": "plg-platform-harness",
+        "ENGRAM_DATA_DIR": "/workspace/.flow/memory/engram"
+      }
+    }
+  }
+}

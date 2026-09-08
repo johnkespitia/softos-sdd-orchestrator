@@ -1,0 +1,35 @@
+{
+  "target_roots": [
+    ".github",
+    "AGENTS.md",
+    "README.md",
+    "src",
+    "tests"
+  ],
+  "default_targets": [
+    "../../{path}/src/**",
+    "../../{path}/tests/**"
+  ],
+  "test_runner": "none",
+  "test_hint": null,
+  "test_required_roots": [
+    "src",
+    "tests"
+  ],
+  "placeholder_dirs": [
+    "src",
+    "tests"
+  ],
+  "placeholder_files": {},
+  "agent_skill_refs": [
+    "workspace/softos-spec-definition-playbook",
+    "workspace/softos-reference-spec-hardening",
+    "workspace/softos-schema-hardening-gates",
+    "workspace/softos-staging-promote-preflight",
+    "workspace/softos-worktree-hygiene",
+    "workspace/spec-driven-workspace",
+    "workspace/skills-discover"
+  ],
+  "compose": null,
+  "notes": "Runtime base agnóstico para repos sin scaffolding de lenguaje."
+}

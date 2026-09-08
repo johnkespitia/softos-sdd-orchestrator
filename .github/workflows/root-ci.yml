@@ -1,0 +1,476 @@
+name: Root CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  spec-governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: false
+          fetch-depth: 0
+
+      - name: Normalize and hydrate submodules
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: ./scripts/ci/normalize_gitmodules.sh
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: python3 -m pip install --upgrade pip PyYAML
+
+      - name: Flow signature drift guard
+        run: python3 ./scripts/ci/check_flow_signature_drift.py
+
+      - name: Flow doctor
+        run: python3 ./flow doctor
+
+      - name: Repo/Submodule doctor
+        run: python3 ./flow submodule doctor --json
+
+      - name: Secrets doctor
+        run: python3 ./flow secrets doctor --json
+
+      - name: Secret scan
+        run: python3 ./flow secrets scan --all --json
+
+      - name: Boilerplate guardrail
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="${{ github.sha }}"
+          BASE_SHA=""
+
+          ensure_commit() {
+            local sha="$1"
+            if [ -z "$sha" ] || [ "$sha" = "0000000000000000000000000000000000000000" ]; then
+              return 1
+            fi
+            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              return 0
+            fi
+            git fetch --no-tags origin "${sha}" || true
+            git cat-file -e "${sha}^{commit}" 2>/dev/null
+          }
+
+          has_merge_base() {
+            local base_sha="$1"
+            local head_sha="$2"
+            git merge-base "$base_sha" "$head_sha" >/dev/null 2>&1
+          }
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CANDIDATE_BASE="${{ github.event.pull_request.base.sha }}"
+            if ensure_commit "$CANDIDATE_BASE" && ensure_commit "$HEAD_SHA"; then
+              BASE_SHA="$CANDIDATE_BASE"
+            fi
+          else
+            CANDIDATE_BASE="${{ github.event.before }}"
+            if ensure_commit "$CANDIDATE_BASE" && ensure_commit "$HEAD_SHA"; then
+              BASE_SHA="$CANDIDATE_BASE"
+            elif PARENT_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null)"; then
+              BASE_SHA="$PARENT_SHA"
+            fi
+          fi
+
+          if [ -n "$BASE_SHA" ]; then
+            scripts/guardrails/check_boilerplate_protected_paths.sh --base "$BASE_SHA" --head "$HEAD_SHA"
+          else
+            echo "Skipping boilerplate guardrail: no resolvable base commit."
+          fi
+
+      - name: Docs i18n validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="${{ github.sha }}"
+          MODE="skip"
+          BASE_SHA=""
+
+          ensure_commit() {
+            local sha="$1"
+            if [ -z "$sha" ] || [ "$sha" = "0000000000000000000000000000000000000000" ]; then
+              return 1
+            fi
+            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              return 0
+            fi
+            git fetch --no-tags origin "${sha}" || true
+            git cat-file -e "${sha}^{commit}" 2>/dev/null
+          }
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CANDIDATE_BASE="${{ github.event.pull_request.base.sha }}"
+            if ensure_commit "$CANDIDATE_BASE" && ensure_commit "$HEAD_SHA"; then
+              MODE="changed"
+              BASE_SHA="$CANDIDATE_BASE"
+            fi
+          else
+            CANDIDATE_BASE="${{ github.event.before }}"
+            if ensure_commit "$CANDIDATE_BASE" && ensure_commit "$HEAD_SHA"; then
+              MODE="changed"
+              BASE_SHA="$CANDIDATE_BASE"
+            elif PARENT_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null)"; then
+              MODE="changed"
+              BASE_SHA="$PARENT_SHA"
+            fi
+          fi
+
+          if [ "$MODE" = "changed" ]; then
+            python3 ./scripts/ci/validate_docs_i18n.py --changed --base "$BASE_SHA" --head "$HEAD_SHA"
+          else
+            echo "Skipping docs i18n validation: no resolvable base commit."
+          fi
+
+      - name: Docs i18n legacy audit (non-blocking)
+        if: always()
+        continue-on-error: true
+        run: python3 ./scripts/ci/validate_docs_i18n.py --audit-all
+
+      - name: Spec-driven CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="${{ github.sha }}"
+          MODE="all"
+          BASE_SHA=""
+
+          ensure_commit() {
+            local sha="$1"
+            if [ -z "$sha" ] || [ "$sha" = "0000000000000000000000000000000000000000" ]; then
+              return 1
+            fi
+            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              return 0
+            fi
+            git fetch --no-tags origin "${sha}" || true
+            git cat-file -e "${sha}^{commit}" 2>/dev/null
+          }
+
+          has_merge_base() {
+            local base_sha="$1"
+            local head_sha="$2"
+            git merge-base "$base_sha" "$head_sha" >/dev/null 2>&1
+          }
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CANDIDATE_BASE="${{ github.event.pull_request.base.sha }}"
+            if ensure_commit "$CANDIDATE_BASE" && ensure_commit "$HEAD_SHA"; then
+              MODE="changed"
+              BASE_SHA="$CANDIDATE_BASE"
+            fi
+          else
+            CANDIDATE_BASE="${{ github.event.before }}"
+            if ensure_commit "$CANDIDATE_BASE" && ensure_commit "$HEAD_SHA"; then
+              MODE="changed"
+              BASE_SHA="$CANDIDATE_BASE"
+            elif PARENT_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null)"; then
+              MODE="changed"
+              BASE_SHA="$PARENT_SHA"
+              echo "Falling back to HEAD parent as base: ${BASE_SHA}"
+            fi
+          fi
+
+          if [ "$MODE" = "changed" ]; then
+            if ! has_merge_base "$BASE_SHA" "$HEAD_SHA"; then
+              echo "No merge-base between ${BASE_SHA} and ${HEAD_SHA}. Trying HEAD parent fallback."
+              if PARENT_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null)"; then
+                if ensure_commit "$PARENT_SHA" && has_merge_base "$PARENT_SHA" "$HEAD_SHA"; then
+                  BASE_SHA="$PARENT_SHA"
+                  echo "Using HEAD parent as base: ${BASE_SHA}"
+                else
+                  echo "HEAD parent is not usable as base. Falling back to all specs."
+                  MODE="all"
+                fi
+              else
+                echo "No HEAD parent available. Falling back to all specs."
+                MODE="all"
+              fi
+            fi
+          fi
+
+          if [ "$MODE" = "changed" ]; then
+            python3 ./flow spec guard --changed --base "$BASE_SHA" --head "$HEAD_SHA" --json
+            python3 ./flow ci spec --changed --base "$BASE_SHA" --head "$HEAD_SHA"
+            python3 ./flow drift check --changed --base "$BASE_SHA" --head "$HEAD_SHA" --json
+            python3 ./flow contract verify --changed --base "$BASE_SHA" --head "$HEAD_SHA" --json
+          else
+            python3 ./flow spec guard --all --json
+            python3 ./flow ci spec --all
+            python3 ./flow drift check --all --json
+            python3 ./flow contract verify --all --json
+          fi
+
+      - name: Upload CI reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flow-ci-reports
+          path: .flow/reports/
+
+  discover-repo-ci-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      generic_matrix: ${{ steps.discover.outputs.generic_matrix }}
+      delegated_matrix: ${{ steps.discover.outputs.delegated_matrix }}
+      has_generic: ${{ steps.discover.outputs.has_generic }}
+      has_delegated: ${{ steps.discover.outputs.has_delegated }}
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: false
+          fetch-depth: 0
+
+      - name: Discover repo/runtime matrix
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ./scripts/ci/discover_repo_ci_matrix.py > /tmp/repo_ci_matrix.out
+          cat /tmp/repo_ci_matrix.out >> "$GITHUB_OUTPUT"
+
+  repo-ci:
+    runs-on: ubuntu-latest
+    needs:
+      - spec-governance
+      - discover-repo-ci-matrix
+    if: needs.discover-repo-ci-matrix.outputs.has_generic == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover-repo-ci-matrix.outputs.generic_matrix) }}
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: false
+          fetch-depth: 0
+
+      - name: Normalize and hydrate submodules
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: ./scripts/ci/normalize_gitmodules.sh
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Go
+        if: matrix.needs_go == true
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Setup Node
+        if: matrix.needs_node == true
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        if: matrix.needs_node == true
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup PHP
+        if: matrix.needs_php == true
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, xml, bcmath, curl, sqlite3
+          tools: composer:v2
+
+      - name: Install Python deps
+        run: python3 -m pip install --upgrade pip PyYAML
+
+      - name: Node lockfile precheck
+        if: matrix.needs_node == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_path="${{ matrix.path }}"
+          has_lock=0
+          for candidate in \
+            "${repo_path}/pnpm-lock.yaml" \
+            "${repo_path}/code/pnpm-lock.yaml" \
+            "${repo_path}/src/pnpm-lock.yaml"; do
+            if [ -f "$candidate" ]; then
+              has_lock=1
+              echo "Found pnpm lockfile: $candidate"
+              break
+            fi
+          done
+          if [ "$has_lock" -eq 0 ]; then
+            echo "::warning::No pnpm-lock.yaml found for '${{ matrix.repo }}'. CI dependency resolution is non-deterministic and may break tests unexpectedly."
+          fi
+
+      - name: Prepare PHP .env
+        if: matrix.needs_php == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_path="${{ matrix.path }}"
+          for candidate in "${repo_path}" "${repo_path}/src" "${repo_path}/code"; do
+            if [ -f "${candidate}/.env.example" ] && [ ! -f "${candidate}/.env" ]; then
+              cp "${candidate}/.env.example" "${candidate}/.env"
+              echo "Created ${candidate}/.env from .env.example"
+              break
+            fi
+          done
+
+      - name: Repo CI
+        id: repo_ci
+        continue-on-error: true
+        shell: bash
+        env:
+          FLOW_SKIP_COMPOSE_WRAP: "1"
+        run: |
+          set -euo pipefail
+          rc=0
+          python3 ./flow ci repo "${{ matrix.repo }}" || rc=$?
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+
+      - name: Repo CI report summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_md=".flow/reports/ci/repo-${{ matrix.repo }}.md"
+          report_json=".flow/reports/ci/repo-${{ matrix.repo }}.json"
+          echo "Repo CI exit_code: ${{ steps.repo_ci.outputs.exit_code }}"
+          if [ -f "$report_md" ]; then
+            echo "---- ${report_md} ----"
+            cat "$report_md"
+          fi
+          if [ -f "$report_json" ]; then
+            echo "---- ${report_json} ----"
+            cat "$report_json"
+          fi
+
+      - name: Enforce Repo CI result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.repo_ci.outputs.exit_code }}" != "0" ]; then
+            echo "Repo CI failed for '${{ matrix.repo }}'. See report summary above."
+            exit 1
+          fi
+
+      - name: Upload CI reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flow-ci-reports-${{ matrix.repo }}
+          path: .flow/reports/
+
+  repo-ci-delegated:
+    runs-on: ubuntu-latest
+    needs:
+      - spec-governance
+      - discover-repo-ci-matrix
+    if: needs.discover-repo-ci-matrix.outputs.has_delegated == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover-repo-ci-matrix.outputs.delegated_matrix) }}
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: false
+          fetch-depth: 0
+
+      - name: Validate delegated workflow config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ matrix.workflow }}" ]; then
+            echo "Repo '${{ matrix.repo }}' declares ci.mode=workflow-dispatch but no ci.workflow."
+            exit 1
+          fi
+          if [ "${{ matrix.trigger_mode }}" != "workflow_dispatch_only" ]; then
+            echo "Repo '${{ matrix.repo }}' must declare ci.trigger_mode=workflow_dispatch_only when delegated from root-ci."
+            exit 1
+          fi
+
+      - name: Dispatch project workflow
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          TARGET_REF: ${{ github.head_ref || github.ref_name }}
+          TARGET_REPOSITORY: ${{ matrix.workflow_repository || github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          WORKFLOW_INPUTS_JSON: ${{ toJson(matrix.inputs) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/ci/run_project_workflow.sh
+          ./scripts/ci/run_project_workflow.sh \
+            "${{ matrix.workflow }}" \
+            "${TARGET_REPOSITORY}" \
+            "${TARGET_REF}" \
+            "${HEAD_SHA}" \
+            "${WORKFLOW_INPUTS_JSON}"
+
+  integration-smoke:
+    runs-on: ubuntu-latest
+    needs:
+      - spec-governance
+      - discover-repo-ci-matrix
+      - repo-ci
+      - repo-ci-delegated
+    if: needs.spec-governance.result == 'success' && (needs.discover-repo-ci-matrix.outputs.has_generic != 'true' || needs.repo-ci.result == 'success') && (needs.discover-repo-ci-matrix.outputs.has_delegated != 'true' || needs.repo-ci-delegated.result == 'success')
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+          submodules: false
+          fetch-depth: 0
+
+      - name: Normalize and hydrate submodules
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: ./scripts/ci/normalize_gitmodules.sh
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: python3 -m pip install --upgrade pip PyYAML
+
+      - name: Build stack
+        run: python3 ./flow stack build
+
+      - name: Start stack
+        run: python3 ./flow stack up
+
+      - name: Integration smoke (smoke:ci-clean — bloqueante)
+        run: python3 ./flow ci integration --profile smoke:ci-clean --auto-up --json
+
+      - name: Upload integration reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flow-integration-reports
+          path: .flow/reports/
