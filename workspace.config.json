@@ -138,6 +138,142 @@
       "project": "plg-platform-harness",
       "data_dir": ".flow/memory/engram",
       "source_boundary": "consultive"
+    },
+    "execution": {
+      "recall_before_plan": false,
+      "save_after_release_publish": false
+    }
+  },
+  "code_graph": {
+    "provider": "graphify",
+    "version": "0.9.56",
+    "output_dir": "graphify-out",
+    "mode": "code-only",
+    "source_boundary": "derived"
+  },
+  "examples": {
+    "project_release_deploy": {
+      "legacy-api": {
+        "deploy": {
+          "provider": "github-actions",
+          "providers_by_env": {
+            "staging": "github-actions",
+            "production": "github-actions"
+          },
+          "promotion_strategy": {
+            "mode": "pull_request"
+          },
+          "contract": {
+            "deploy_requires_pr": true,
+            "deploy_requires_healthcheck": true,
+            "post_deploy_smoke_required": true
+          },
+          "verify": {
+            "mode": "healthcheck",
+            "retry": {
+              "attempts": 4,
+              "backoff_seconds": 5
+            }
+          },
+          "env": {
+            "FLOW_DEPLOY_GITHUB_REPO": "acme/legacy-api",
+            "FLOW_DEPLOY_GITHUB_WORKFLOW": "promotion-pr.yml",
+            "FLOW_DEPLOY_GITHUB_REF": "main"
+          },
+          "env_by_env": {
+            "staging": {
+              "FLOW_DEPLOY_SOURCE_REF": "release",
+              "FLOW_DEPLOY_RUN_MIGRATIONS": "true"
+            },
+            "production": {
+              "FLOW_DEPLOY_SOURCE_REF": "staging"
+            }
+          }
+        },
+        "ci": {
+          "install_contract": {
+            "mode": "strict",
+            "manifest_files": [
+              "package.json"
+            ],
+            "lock_files": [
+              "pnpm-lock.yaml"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "agents": {
+    "schema_version": 1,
+    "executors": {
+      "codex": {
+        "adapter": "codex",
+        "executable": "codex",
+        "argv": []
+      },
+      "cursor": {
+        "adapter": "cursor",
+        "executable": "agent",
+        "argv": []
+      },
+      "opencode": {
+        "adapter": "opencode",
+        "executable": "opencode",
+        "argv": []
+      },
+      "opencode-local": {
+        "adapter": "opencode",
+        "executable": "opencode-softos",
+        "argv": []
+      }
+    }
+  },
+  "agent_resources": {
+    "schema_version": 1,
+    "resources": {
+      "opencode-local": {
+        "executor": "opencode-local",
+        "capabilities": [
+          "tool_calling",
+          "write",
+          "local_execution"
+        ],
+        "capacity": 1,
+        "cost_tier": "local",
+        "selection_priority": 10,
+        "model_resolution": "worker_profile",
+        "data_sensitivity": "local-only"
+      },
+      "opencode-free": {
+        "executor": "opencode",
+        "capabilities": [
+          "tool_calling",
+          "write",
+          "cloud_execution"
+        ],
+        "capacity": 1,
+        "cost_tier": "cloud/free",
+        "selection_priority": 20,
+        "model_resolution": "dynamic_free",
+        "data_sensitivity": "cloud-eligible",
+        "candidate_tie_break": "lexical"
+      },
+      "opencode-go": {
+        "executor": "opencode",
+        "capabilities": [
+          "tool_calling",
+          "write",
+          "cloud_execution",
+          "architecture"
+        ],
+        "capacity": 1,
+        "cost_tier": "cloud/paid-low",
+        "selection_priority": 30,
+        "model_resolution": "dynamic_go",
+        "data_sensitivity": "cloud-eligible",
+        "candidate_tie_break": "lexical"
+      }
     }
   }
 }

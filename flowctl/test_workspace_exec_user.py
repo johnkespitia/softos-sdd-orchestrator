@@ -211,7 +211,7 @@ def test_wrap_repo_command_for_service_uses_workspace_user(monkeypatch: pytest.M
         flow_module.compose_base_command = lambda: ["compose"]
         flow_module.repo_container_workdir = lambda path: "/workspace"
         wrapped = flow_module.wrap_repo_command_for_service(
-            "sdd-workspace-boilerplate",
+            flow_module.ROOT_REPO,
             Path("/tmp/root"),
             ["pytest"],
         )
@@ -301,12 +301,17 @@ def test_workspace_entrypoint_drops_to_development_user() -> None:
     assert "prepare_runtime_user_dirs()" in entrypoint
     assert 'workspace_home="$(getent passwd "$workspace_user" | cut -d: -f6 || true)"' in entrypoint
     assert '"$workspace_home/.local"' in entrypoint
+    assert '"$workspace_home/.local/bin"' in entrypoint
+    assert '"$workspace_home/.local/lib"' in entrypoint
     assert '"$workspace_home/.local/share"' in entrypoint
     assert '"$workspace_home/.local/share/tessl"' in entrypoint
     assert '"$workspace_home/.local/share/pnpm/store"' in entrypoint
     assert '"$workspace_home/.config"' in entrypoint
     assert '"$workspace_home/.cache"' in entrypoint
     assert 'chown "$target_uid:$target_gid" "${runtime_dirs[@]}"' in entrypoint
+    assert 'export HOME="$workspace_home"' in entrypoint
+    assert 'export USER="$workspace_user"' in entrypoint
+    assert 'export LOGNAME="$workspace_user"' in entrypoint
     assert "groupadd" in entrypoint
     assert "usermod" in entrypoint
     assert 'target_uid="$(id -u "$workspace_user")"' in entrypoint
