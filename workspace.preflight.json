@@ -20,6 +20,10 @@
       "bootstrap_cmd": "composer install --no-interaction --prefer-dist --no-progress",
       "readiness_status_cmd": "php artisan --version && curl -fsS http://127.0.0.1/api/v2/auto/health",
       "migration_apply_cmd": "php artisan migrate --force"
+    },
+    "hub-frontend": {
+      "bootstrap_cmd": "pnpm install --frozen-lockfile",
+      "readiness_status_cmd": "node -v && curl -fsS http://127.0.0.1:5173/"
     }
   }
 }

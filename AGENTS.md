@@ -7,7 +7,8 @@ This is a multi-project workspace. Use the nearest `AGENTS.md` plus parent `AGEN
 ## Project routing
 
 - Use `plg-platform-backend/AGENTS.md` for backend specs, Laravel architecture, runtime commands, or files under `plg-platform-backend/**`.
-- Register any future frontend repo in `workspace.config.json` and add its nearest `AGENTS.md` before routing work into it.
+- Use `dashboard-frontend/AGENTS.md` for the legacy CRA dashboard under `dashboard-frontend/**`.
+- Use `hub-frontend/AGENTS.md` for the Vite + React + TypeScript hub under `hub-frontend/**`.
 - Use root `specs/**` as the canonical source of truth for system-level features, cross-repo behavior, and orchestration rules.
 
 ## Skills por runtime

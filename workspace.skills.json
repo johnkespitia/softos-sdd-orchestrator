@@ -107,6 +107,56 @@
       "required": true,
       "sync": false,
       "notes": "Contexto tecnico local para mantener la aplicacion Laravel 8 existente sin upgrades implicitos."
+    },
+    {
+      "name": "workspace/node-core",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/node-core",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contrato tecnico local para Node.js y npm en repos SoftOS."
+    },
+    {
+      "name": "workspace/react-cra",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/react-cra",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contexto tecnico del dashboard React existente basado en Create React App."
+    },
+    {
+      "name": "workspace/vite-expert",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/vite-expert",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Convenciones Vite para frontends SoftOS con Vitest y servidor de desarrollo en Compose."
+    },
+    {
+      "name": "workspace/react-expert",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/react-expert",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Convenciones React 18 para frontends Vite con layout por features."
+    },
+    {
+      "name": "workspace/typescript-expert",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/typescript-expert",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Convenciones TypeScript estrictas para repos Node SoftOS."
     }
   ]
 }

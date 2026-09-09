@@ -113,6 +113,7 @@
         "mode": "workflow-dispatch",
         "workflow": "repo-ci.yml",
         "workflow_repository": "PLGEducation/plg-platform-backend",
+        "ref": "main",
         "trigger_mode": "workflow_dispatch_only",
         "install": [
           "composer",
@@ -128,6 +129,194 @@
           "src/vendor/bin/phpunit",
           "-c",
           "src/phpunit.xml"
+        ]
+      }
+    },
+    "dashboard-frontend": {
+      "path": "dashboard-frontend",
+      "compose_service": "front-app",
+      "compose_file": "dashboard-frontend/docker-compose.yaml",
+      "kind": "implementation",
+      "runtime": "node-npm-react-cra",
+      "capabilities": [
+        "react-cra"
+      ],
+      "repo_strategy": "submodule",
+      "slice_prefix": "dashboard-frontend",
+      "default_targets": [
+        "../../dashboard-frontend/src/src/**",
+        "../../dashboard-frontend/src/public/**",
+        "../../dashboard-frontend/package.json",
+        "../../dashboard-frontend/src/package.json"
+      ],
+      "target_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "package-lock.json",
+        "src/package.json",
+        "src/package-lock.json",
+        "src/public",
+        "src/src",
+        "tests"
+      ],
+      "contract_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "package-lock.json",
+        "src/package.json",
+        "src/package-lock.json",
+        "src/public",
+        "src/src",
+        "tests"
+      ],
+      "test_required_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "package-lock.json",
+        "src/package.json",
+        "src/package-lock.json",
+        "src/public",
+        "src/src",
+        "tests"
+      ],
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/node-core",
+        "workspace/react-cra"
+      ],
+      "test_runner": "npm",
+      "test_hint": "../../dashboard-frontend/src/src/**/*.test.{js,jsx,ts,tsx}",
+      "ci": {
+        "install": [
+          "sh",
+          "-lc",
+          "npm ci && npm --prefix src ci"
+        ],
+        "test": [
+          "sh",
+          "-lc",
+          "CI=true npm --prefix src test -- --watchAll=false"
+        ],
+        "build": [
+          "npm",
+          "--prefix",
+          "src",
+          "run",
+          "build"
+        ]
+      }
+    },
+    "hub-frontend": {
+      "path": "hub-frontend",
+      "compose_service": "hub-front",
+      "compose_file": "hub-frontend/docker-compose.yaml",
+      "kind": "implementation",
+      "runtime": "node",
+      "capabilities": [
+        "vite-react",
+        "typescript"
+      ],
+      "repo_strategy": "submodule",
+      "slice_prefix": "hub-frontend",
+      "default_targets": [
+        "../../hub-frontend/src/**",
+        "../../hub-frontend/index.html",
+        "../../hub-frontend/vite.config.ts",
+        "../../hub-frontend/package.json"
+      ],
+      "target_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "pnpm-lock.yaml",
+        "index.html",
+        "vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "tailwind.config.mjs",
+        "public",
+        "src",
+        "tests"
+      ],
+      "contract_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "pnpm-lock.yaml",
+        "index.html",
+        "vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "tailwind.config.mjs",
+        "public",
+        "src",
+        "tests"
+      ],
+      "test_required_roots": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "src",
+        "tests"
+      ],
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/node-core",
+        "workspace/vite-expert",
+        "workspace/react-expert",
+        "workspace/typescript-expert"
+      ],
+      "test_runner": "pnpm",
+      "test_hint": "../../hub-frontend/src/**/*.{test,spec}.{ts,tsx}",
+      "ci": {
+        "mode": "workflow-dispatch",
+        "workflow": "repo-ci.yml",
+        "workflow_repository": "PLGEducation/hub-frontend",
+        "ref": "main",
+        "trigger_mode": "workflow_dispatch_only",
+        "install": [
+          "pnpm",
+          "install",
+          "--frozen-lockfile"
+        ],
+        "test": [
+          "pnpm",
+          "test"
+        ],
+        "lint": [
+          "pnpm",
+          "lint"
+        ],
+        "build": [
+          "pnpm",
+          "build"
         ]
       }
     }
