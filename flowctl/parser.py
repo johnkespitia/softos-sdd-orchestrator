@@ -938,6 +938,19 @@ def build_parser(
     agent_doctor.add_argument("--json", action="store_true", help="Print availability as JSON.")
     agent_doctor.set_defaults(func=commands["agent_doctor"])
 
+    agent_select = agent_subparsers.add_parser(
+        "select",
+        help="Select an available executor for the orchestrator role.",
+    )
+    agent_select.add_argument(
+        "--role",
+        choices=("orchestrator",),
+        default="orchestrator",
+        help="Role to select. Only orchestrator selection is automatic.",
+    )
+    agent_select.add_argument("--json", action="store_true", help="Print the selection as JSON.")
+    agent_select.set_defaults(func=commands["agent_select"])
+
     agent_run = agent_subparsers.add_parser(
         "run",
         help="Run a configured host-native executor against a bounded repo/worktree.",
@@ -962,6 +975,29 @@ def build_parser(
         "--sandbox",
         choices=("read-only", "workspace-write", "danger-full-access"),
         help="Codex sandbox policy for this process only; valid only with the codex executor.",
+    )
+    agent_run.add_argument(
+        "--transport",
+        choices=("auto", "acp", "cli"),
+        help="Execution transport override. Defaults to the executor configuration.",
+    )
+    agent_run.add_argument(
+        "--role",
+        choices=("orchestrator", "worker", "reviewer"),
+        default=None,
+        help="SoftOS runtime role. Standalone runs default to orchestrator; nested runs default to worker.",
+    )
+    agent_run.add_argument(
+        "--run-id",
+        help="Stable run id. Worker and reviewer runs require it.",
+    )
+    agent_run.add_argument(
+        "--parent-run-id",
+        help="Parent orchestrator run id. Required for worker and reviewer runs.",
+    )
+    agent_run.add_argument(
+        "--handoff",
+        help="Canonical handoff reference. Required for worker and reviewer runs.",
     )
     agent_run.set_defaults(func=commands["agent_run"])
 

@@ -78,6 +78,7 @@ from flowctl.doctor import command_doctor as flow_command_doctor
 from flowctl.agent_executors import command_agent_doctor as flow_command_agent_doctor
 from flowctl.agent_executors import command_agent_list as flow_command_agent_list
 from flowctl.agent_executors import command_agent_run as flow_command_agent_run
+from flowctl.agent_executors import command_agent_select as flow_command_agent_select
 from flowctl.parser import build_parser as flow_build_parser
 from flowctl.projects import repo_placeholder_text
 from flowctl.admin import (
@@ -2353,6 +2354,15 @@ def command_agent_doctor(args: argparse.Namespace) -> int:
     )
 
 
+def command_agent_select(args: argparse.Namespace) -> int:
+    return flow_command_agent_select(
+        args,
+        workspace_config_file=WORKSPACE_CONFIG_FILE,
+        shutil_which=shutil.which,
+        json_dumps=json_dumps,
+    )
+
+
 def command_agent_run(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -3182,6 +3192,7 @@ def build_parser() -> argparse.ArgumentParser:
         "doctor": command_doctor,
         "agent_list": command_agent_list,
         "agent_doctor": command_agent_doctor,
+        "agent_select": command_agent_select,
         "agent_run": command_agent_run,
         "init": command_init,
         "gateway_list": command_gateway_list,

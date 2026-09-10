@@ -21,6 +21,7 @@ from flowctl.agent_process_execution import (
     resolve_resource_model,
     resolve_target_within_workdir,
     run_agent_process,
+    validate_handoff_ref,
     validate_process_env_overlay,
     validate_workdir,
 )
@@ -32,6 +33,12 @@ from flowctl.agent_executor_adapters import (
     build_execution_contract,
 )
 from flowctl.agent_executors import AgentExecutor
+from flowctl.agent_roles import (
+    ROLE_ENV_HANDOFF,
+    ROLE_ENV_PARENT_RUN_ID,
+    ROLE_ENV_ROLE,
+    ROLE_ENV_RUN_ID,
+)
 from flowctl.tooling import HOST_EXECUTION_BLOCK_MESSAGE
 
 
@@ -242,6 +249,20 @@ class PathContainmentTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def test_handoff_must_exist_inside_workspace(self) -> None:
+        handoff = self.root / ".flow" / "reports" / "handoff.json"
+        handoff.parent.mkdir(parents=True)
+        handoff.write_text("{}", encoding="utf-8")
+        self.assertEqual(
+            handoff.resolve(),
+            validate_handoff_ref(
+                ".flow/reports/handoff.json",
+                workspace_root=self.root,
+            ),
+        )
+        with self.assertRaisesRegex(AgentRunError, "handoff existente"):
+            validate_handoff_ref(".flow/reports/missing.json", workspace_root=self.root)
 
 
 class SubprocessExecutionTests(unittest.TestCase):
@@ -985,8 +1006,18 @@ class ResourceProcessOverlayTests(unittest.TestCase):
             )
         self.assertEqual(0, exit_code)
         self.assertEqual("opencode-local", metadata.resource_id)
-        # Local keeps true inheritance: no env= kwarg when overlay is empty.
-        self.assertNotIn("env", captured)
+        # Local keeps the operator config, while runtime identity is always
+        # propagated so nested invocations cannot become orchestrators.
+        env = captured["env"]
+        assert isinstance(env, dict)
+        self.assertEqual("orchestrator", env[ROLE_ENV_ROLE])
+        self.assertEqual("standalone-orchestrator", env[ROLE_ENV_RUN_ID])
+        self.assertEqual("", env[ROLE_ENV_PARENT_RUN_ID])
+        self.assertEqual("", env[ROLE_ENV_HANDOFF])
+        self.assertEqual(
+            json.dumps({"default_agent": "softos-local-worker"}),
+            env[OPENCODE_CONFIG_CONTENT_ENV],
+        )
 
     def test_free_resolved_model_reaches_subprocess_overlay(self) -> None:
         prepared = prepare_agent_run(

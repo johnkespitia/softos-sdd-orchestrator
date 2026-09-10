@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -10,7 +11,10 @@ from typing import Callable, Optional
 SUPPORTED_ADAPTERS = frozenset({"codex", "cursor", "opencode"})
 EXECUTOR_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 AGENTS_SCHEMA_VERSION = 1
-EXECUTOR_FIELDS = frozenset({"adapter", "executable", "argv"})
+EXECUTOR_FIELDS = frozenset({"adapter", "executable", "argv", "transport", "allow_cli_fallback", "permission_policy", "acp"})
+ACP_FIELDS = frozenset({"executable", "argv", "auth_method"})
+TRANSPORTS = frozenset({"cli", "acp", "auto"})
+PERMISSION_POLICIES = frozenset({"reject", "allow_once"})
 
 
 @dataclass(frozen=True)
@@ -19,6 +23,12 @@ class AgentExecutor:
     adapter: str
     executable: str
     argv: tuple[str, ...]
+    transport: str = "cli"
+    allow_cli_fallback: bool = False
+    permission_policy: str = "reject"
+    acp_executable: str | None = None
+    acp_argv: tuple[str, ...] = ()
+    acp_auth_method: str | None = None
 
 
 class AgentRegistryError(Exception):
@@ -125,11 +135,62 @@ def parse_agents_registry(workspace_config: dict[str, object]) -> dict[str, Agen
                 )
             argv.append(item)
 
+        transport = entry.get("transport", "cli")
+        if not isinstance(transport, str) or transport not in TRANSPORTS:
+            raise AgentRegistryError(
+                f"`agents.executors.{executor_id}.transport` invalido: `{transport!r}`."
+            )
+        allow_cli_fallback = entry.get("allow_cli_fallback", False)
+        if not isinstance(allow_cli_fallback, bool):
+            raise AgentRegistryError(
+                f"`agents.executors.{executor_id}.allow_cli_fallback` debe ser booleano."
+            )
+        permission_policy = entry.get("permission_policy", "reject")
+        if not isinstance(permission_policy, str) or permission_policy not in PERMISSION_POLICIES:
+            raise AgentRegistryError(
+                f"`agents.executors.{executor_id}.permission_policy` invalido: `{permission_policy!r}`."
+            )
+
+        acp_executable: str | None = None
+        acp_argv: tuple[str, ...] = ()
+        acp_auth_method: str | None = None
+        acp_raw = entry.get("acp")
+        if acp_raw is not None:
+            if not isinstance(acp_raw, dict):
+                raise AgentRegistryError(f"`agents.executors.{executor_id}.acp` debe ser un objeto.")
+            unknown_acp = set(acp_raw) - ACP_FIELDS
+            if unknown_acp:
+                raise AgentRegistryError(
+                    f"Campo desconocido en `agents.executors.{executor_id}.acp`: `{sorted(unknown_acp)[0]}`."
+                )
+            raw_acp_executable = acp_raw.get("executable")
+            if raw_acp_executable is not None:
+                if not isinstance(raw_acp_executable, str) or not raw_acp_executable.strip():
+                    raise AgentRegistryError(
+                        f"`agents.executors.{executor_id}.acp.executable` debe ser un string no vacio."
+                    )
+                acp_executable = raw_acp_executable.strip()
+                _validate_executor_executable(executor_id=f"{executor_id}.acp", executable=acp_executable)
+            raw_acp_argv = acp_raw.get("argv", [])
+            if not isinstance(raw_acp_argv, list) or not all(isinstance(item, str) for item in raw_acp_argv):
+                raise AgentRegistryError(f"`agents.executors.{executor_id}.acp.argv` debe ser un arreglo de strings.")
+            acp_argv = tuple(raw_acp_argv)
+            if acp_raw.get("auth_method") is not None:
+                if not isinstance(acp_raw["auth_method"], str) or not acp_raw["auth_method"].strip():
+                    raise AgentRegistryError(f"`agents.executors.{executor_id}.acp.auth_method` debe ser un string no vacio.")
+                acp_auth_method = acp_raw["auth_method"].strip()
+
         executors[str(executor_id)] = AgentExecutor(
             executor_id=str(executor_id),
             adapter=adapter,
             executable=executable,
             argv=tuple(argv),
+            transport=transport,
+            allow_cli_fallback=allow_cli_fallback,
+            permission_policy=permission_policy,
+            acp_executable=acp_executable,
+            acp_argv=acp_argv,
+            acp_auth_method=acp_auth_method,
         )
 
     return dict(sorted(executors.items()))
@@ -231,6 +292,46 @@ def command_agent_doctor(
     return 0 if all(item["status"] == "ready" for item in results) else 1
 
 
+def command_agent_select(
+    args,
+    *,
+    workspace_config_file: Path,
+    shutil_which: Callable[[str], Optional[str]],
+    json_dumps: Callable[[object], str],
+) -> int:
+    from flowctl.agent_roles import AgentRoleError, select_orchestrator_executor
+
+    if str(getattr(args, "role", "orchestrator")).strip().lower() != "orchestrator":
+        raise SystemExit("La seleccion automatica solo esta disponible para `role=orchestrator`.")
+
+    try:
+        executors = load_agent_registry(workspace_config_file)
+        selected, payload = select_orchestrator_executor(
+            executors,
+            executable_status=lambda executable: executable_status(
+                executable,
+                shutil_which=shutil_which,
+            ),
+        )
+    except (AgentRegistryError, AgentRoleError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+    payload = {
+        **payload,
+        "selected_executor": selected.executor_id,
+        "adapter": selected.adapter,
+        "executable": selected.executable,
+    }
+    if bool(getattr(args, "json", False)):
+        print(json_dumps(payload))
+    else:
+        print(
+            f"{payload['selected']} -> executor={payload['selected_executor']} "
+            f"adapter={payload['adapter']} executable={payload['executable']}"
+        )
+    return 0
+
+
 def command_agent_run(
     args,
     *,
@@ -249,8 +350,15 @@ def command_agent_run(
     # discover_free/discover_go default to None so production uses the OpenCode
     # probe boundary in agent_process_execution; tests may inject fixtures.
     from flowctl.agent_process_execution import AgentRunError, prepare_agent_run, run_agent_process
+    from flowctl.agent_roles import AgentRoleError, resolve_invocation_role
 
     try:
+        role_context = resolve_invocation_role(
+            role=getattr(args, "role", None),
+            run_id=getattr(args, "run_id", None),
+            parent_run_id=getattr(args, "parent_run_id", None),
+            handoff_ref=getattr(args, "handoff", None),
+        )
         prepared = prepare_agent_run(
             executor_id=str(getattr(args, "executor", "")),
             repo_raw=str(getattr(args, "repo", "")),
@@ -262,7 +370,7 @@ def command_agent_run(
             workspace_config=workspace_config,
             root_repo=root_repo,
         )
-        exit_code, _metadata = run_agent_process(
+        exit_code, metadata = run_agent_process(
             executor=prepared.executor,
             repo=prepared.repo,
             workspace_root=workspace_root,
@@ -278,8 +386,37 @@ def command_agent_run(
             auth_evidence=auth_evidence,
             model=getattr(args, "model", None),
             sandbox=getattr(args, "sandbox", None),
+            transport=getattr(args, "transport", None),
+            role=role_context.role,
+            run_id=role_context.run_id,
+            parent_run_id=role_context.parent_run_id,
+            handoff_ref=role_context.handoff_ref,
         )
-    except AgentRunError as exc:
-        raise SystemExit(exc.message) from exc
+    except (AgentRoleError, AgentRunError) as exc:
+        raise SystemExit(str(exc)) from exc
 
+    # ACP updates are written to stdout while evidence is written to stderr.
+    # Flush first so merged terminal output preserves response-before-evidence order.
+    sys.stdout.flush()
+    print(
+        "SOFTOS_EXECUTION_EVIDENCE "
+        + json.dumps(
+            {
+                "executor": metadata.executor_id,
+                "resource": metadata.resource_id,
+                "transport_requested": metadata.transport_requested,
+                "transport_used": metadata.transport_used,
+                "acp_session_id": metadata.acp_session_id,
+                "start_time": metadata.started_at,
+                "end_time": metadata.finished_at,
+                "result": metadata.result,
+                "cancellation": metadata.cancellation,
+                "permission_requests": metadata.permission_requests,
+                "fallback_reason": metadata.fallback_reason,
+                "failure_class": metadata.failure_class,
+            },
+            sort_keys=True,
+        ),
+        file=sys.stderr,
+    )
     return exit_code
