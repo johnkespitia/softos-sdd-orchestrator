@@ -847,6 +847,18 @@ def _verify_release_from_manifest(
             payload["repos"].append(repo_item)
             continue
 
+        # The workspace root is the governance/evidence repository. It can be
+        # intentionally local-only (for example, with an upstream remote that
+        # forbids pushes) and is not a deployable artifact. Release verification
+        # must therefore validate the deployable child repos without requiring
+        # the root commit to exist on a publish remote.
+        if repo_path.resolve() == root.resolve():
+            repo_item["pipeline_status"] = "not-applicable"
+            repo_item["pipeline_required"] = False
+            repo_item["remote_verification"] = "governance-root-local-only"
+            payload["repos"].append(repo_item)
+            continue
+
         remote_rc, remote_stdout, remote_stderr = _run_command(
             ["git", "-C", str(repo_path), "config", "--get", "remote.origin.url"],
             cwd=root,
