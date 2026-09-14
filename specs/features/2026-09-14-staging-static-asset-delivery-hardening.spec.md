@@ -2,7 +2,7 @@
 schema_version: 3
 name: "Hardening de entrega de assets estaticos en staging y produccion"
 description: "Garantizar que los deploys Laravel de staging y produccion materialicen y verifiquen public/storage, que Hostinger publique desde src/public y que la entrega de imagenes tenga evidencia HTTP."
-status: approved
+status: released
 owner: platform
 single_slice_reason: ""
 multi_domain: true
