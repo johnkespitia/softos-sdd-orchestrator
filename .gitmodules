@@ -7,3 +7,6 @@
 [submodule "hub-frontend"]
 	path = hub-frontend
 	url = git@github.com:PLGEducation/hub-frontend.git
+[submodule "plg-infra"]
+	path = plg-infra
+	url = git@github.com:PLGEducation/plg-infra.git
