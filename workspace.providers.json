@@ -8,7 +8,7 @@
         "requires": []
       },
       "github-actions": {
-        "enabled": false,
+        "enabled": true,
         "entrypoint": "scripts/providers/release/github_actions.sh",
         "requires": [
           "gh"

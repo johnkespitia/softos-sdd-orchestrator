@@ -79,6 +79,7 @@ from flowctl.agent_executors import command_agent_doctor as flow_command_agent_d
 from flowctl.agent_executors import command_agent_list as flow_command_agent_list
 from flowctl.agent_executors import command_agent_run as flow_command_agent_run
 from flowctl.agent_executors import command_agent_select as flow_command_agent_select
+from flowctl.profiles import ProfileContext, resolve_profile_context as flow_resolve_profile_context
 from flowctl.parser import build_parser as flow_build_parser
 from flowctl.projects import repo_placeholder_text
 from flowctl.admin import (
@@ -208,6 +209,7 @@ OPERATIONS_REPORT_ROOT = REPORT_ROOT / "operations"
 OPERATIONS_REPORT_ROOT = REPORT_ROOT / "operations"
 EVIDENCE_REPORT_ROOT = REPORT_ROOT / "evidence"
 AGENT_HANDOFF_REPORT_ROOT = REPORT_ROOT / "agent-handoffs"
+RUNS_ROOT = FLOW_ROOT / "runs"
 SPECS_ROOT = ROOT / "specs"
 FEATURE_SPECS = SPECS_ROOT / "features"
 DEVCONTAINER_COMPOSE_FILE = ROOT / ".devcontainer" / "docker-compose.yml"
@@ -223,6 +225,15 @@ CHANGELOG_FILE = ROOT / "CHANGELOG.md"
 CONTRACTS_ROOT = ROOT / "contracts"
 GENERATED_CONTRACT_ROOT = CONTRACTS_ROOT / "generated"
 
+DEFAULT_DELIVERABLE_ROOTS = {
+    "plans": PLAN_ROOT,
+    "reports": REPORT_ROOT,
+    "ci_reports": CI_REPORT_ROOT,
+    "evidence": EVIDENCE_REPORT_ROOT,
+    "runs": RUNS_ROOT,
+    "state": STATE_ROOT,
+}
+
 
 def wants_json(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "json", False))
@@ -230,6 +241,27 @@ def wants_json(args: argparse.Namespace) -> bool:
 
 def json_dumps(payload: object) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=True)
+
+
+def explicit_profile_arg(args: argparse.Namespace) -> str | None:
+    raw = getattr(args, "profile", None)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
+def resolve_command_profile_context(
+    args: argparse.Namespace,
+    *,
+    spec_path: Path | None = None,
+) -> ProfileContext:
+    return flow_resolve_profile_context(
+        root=ROOT,
+        spec_path=spec_path,
+        explicit_profile=explicit_profile_arg(args),
+        default_roots=DEFAULT_DELIVERABLE_ROOTS,
+    )
 
 
 WORKSPACE_CONTEXT = flow_build_workspace_context(ROOT, RUNTIMES_CONFIG_FILENAME)
@@ -1053,7 +1085,7 @@ def repo_ci_commands(repo: str, repo_path: Path, skip_install: bool) -> list[tup
             commands.append(("Tests", [str(phpunit)]))
         return [(label, wrap_repo_command_for_service(repo, repo_path, command)) for label, command in commands]
 
-    if runner == "pnpm":
+    if runner in {"pnpm", "npm"}:
         package_json = repo_path / "package.json"
         if not package_json.exists():
             return []
@@ -1069,12 +1101,15 @@ def repo_ci_commands(repo: str, repo_path: Path, skip_install: bool) -> list[tup
 
         commands = []
         if not skip_install:
-            install_command = ["pnpm", "install", "--frozen-lockfile"] if (repo_path / "pnpm-lock.yaml").exists() else ["pnpm", "install"]
+            if runner == "npm":
+                install_command = ["npm", "ci"] if (repo_path / "package-lock.json").exists() else ["npm", "install"]
+            else:
+                install_command = ["pnpm", "install", "--frozen-lockfile"] if (repo_path / "pnpm-lock.yaml").exists() else ["pnpm", "install"]
             commands.append(("Install", install_command))
 
         for script_name, label in [("lint", "Lint"), ("test", "Tests"), ("build", "Build")]:
             if script_name in scripts:
-                commands.append((label, ["pnpm", script_name]))
+                commands.append((label, [runner, script_name]))
         return [(label, wrap_repo_command_for_service(repo, repo_path, command)) for label, command in commands]
 
     if runner == "pytest":
@@ -2398,6 +2433,8 @@ def command_spec_create(args: argparse.Namespace) -> int:
 
 
 def command_spec_review(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_features.command_spec_review(
         args,
         require_dirs=require_dirs,
@@ -2413,6 +2450,7 @@ def command_spec_review(args: argparse.Namespace) -> int:
         rel=rel,
         utc_now=utc_now,
         json_dumps=json_dumps,
+        profile_context=profile_context,
     )
 
 
@@ -2464,6 +2502,7 @@ def command_spec_approval_status(args: argparse.Namespace) -> int:
 def command_plan(args: argparse.Namespace) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     if flow_memory_ops.memory_execution_enabled(
         args,
         workspace_config=WORKSPACE_CONFIG,
@@ -2500,6 +2539,7 @@ def command_plan(args: argparse.Namespace) -> int:
             ),
             rel=rel,
             utc_now=utc_now,
+            profile_context=profile_context,
         )
 
     rc = flow_gateway_ops.run_with_remote_claim_heartbeat(
@@ -2523,6 +2563,8 @@ def command_plan(args: argparse.Namespace) -> int:
 
 
 def command_plan_approve(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_features.command_plan_approve(
         args,
         resolve_spec=resolve_spec,
@@ -2532,10 +2574,13 @@ def command_plan_approve(args: argparse.Namespace) -> int:
         write_state=write_state,
         rel=rel,
         utc_now=utc_now,
+        plan_read_roots=profile_context.read_roots["plans"],
     )
 
 
 def command_plan_approval_status(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_features.command_plan_approval_status(
         args,
         resolve_spec=resolve_spec,
@@ -2544,10 +2589,13 @@ def command_plan_approval_status(args: argparse.Namespace) -> int:
         read_state=read_state,
         rel=rel,
         json_dumps=json_dumps,
+        plan_read_roots=profile_context.read_roots["plans"],
     )
 
 
 def command_policy_check(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_policy.command_policy_check(
         args,
         resolve_spec=resolve_spec,
@@ -2556,6 +2604,7 @@ def command_policy_check(args: argparse.Namespace) -> int:
         read_state=read_state,
         rel=rel,
         json_dumps=json_dumps,
+        plan_read_roots=profile_context.read_roots["plans"],
     )
 
 
@@ -2687,6 +2736,8 @@ def command_gateway_reassign(args: argparse.Namespace) -> int:
 
 def command_slice_start(args: argparse.Namespace) -> int:
     slug = slugify(args.spec)
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     flow_gateway_ops.ensure_remote_claim_for_execution(
         root=ROOT,
         slug=slug,
@@ -2703,9 +2754,10 @@ def command_slice_start(args: argparse.Namespace) -> int:
                 slice_name,
                 plan_root=PLAN_ROOT,
                 rel=rel,
+                plan_read_roots=profile_context.read_roots["plans"],
             ),
             worktree_root=WORKTREE_ROOT,
-            report_root=REPORT_ROOT,
+            report_root=profile_context.write_roots["reports"],
             read_state=read_state,
             write_state=write_state,
             rel=rel,
@@ -2734,6 +2786,8 @@ def command_slice_start(args: argparse.Namespace) -> int:
 
 def command_slice_verify(args: argparse.Namespace) -> int:
     slug = slugify(args.spec)
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     flow_gateway_ops.ensure_remote_claim_for_execution(
         root=ROOT,
         slug=slug,
@@ -2750,6 +2804,7 @@ def command_slice_verify(args: argparse.Namespace) -> int:
                 slice_name,
                 plan_root=PLAN_ROOT,
                 rel=rel,
+                plan_read_roots=profile_context.read_roots["plans"],
             ),
             root=ROOT,
             analyze_spec=analyze_spec,
@@ -2759,8 +2814,8 @@ def command_slice_verify(args: argparse.Namespace) -> int:
             git_changed_files=git_changed_files,
             detect_test_command=detect_test_command,
             format_findings=format_findings,
-            report_root=REPORT_ROOT,
-            plan_root=PLAN_ROOT,
+            report_root=profile_context.write_roots["reports"],
+            plan_root=profile_context.write_roots["plans"],
             read_state=read_state,
             write_state=write_state,
             running_inside_workspace=running_inside_workspace,
@@ -2805,6 +2860,8 @@ def command_status(args: argparse.Namespace) -> int:
 
 
 def command_evidence_status(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_evidence.command_evidence_status(
         args,
         resolve_spec=resolve_spec,
@@ -2815,10 +2872,15 @@ def command_evidence_status(args: argparse.Namespace) -> int:
         rel=rel,
         utc_now=utc_now,
         json_dumps=json_dumps,
+        profile_context=profile_context,
+        plan_read_roots=profile_context.read_roots["plans"],
+        report_read_roots=profile_context.read_roots["reports"],
     )
 
 
 def command_evidence_bundle(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_evidence.command_evidence_bundle(
         args,
         root=ROOT,
@@ -2831,10 +2893,15 @@ def command_evidence_bundle(args: argparse.Namespace) -> int:
         rel=rel,
         utc_now=utc_now,
         json_dumps=json_dumps,
+        profile_context=profile_context,
+        plan_read_roots=profile_context.read_roots["plans"],
+        report_read_roots=profile_context.read_roots["reports"],
     )
 
 
 def command_agent_handoff(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec)
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_agent_handoff.command_agent_handoff(
         args,
         root=ROOT,
@@ -2848,10 +2915,15 @@ def command_agent_handoff(args: argparse.Namespace) -> int:
         rel=rel,
         utc_now=utc_now,
         json_dumps=json_dumps,
+        profile_context=profile_context,
+        plan_read_roots=profile_context.read_roots["plans"],
+        report_read_roots=profile_context.read_roots["reports"],
     )
 
 
 def command_ci_spec(args: argparse.Namespace) -> int:
+    spec_path = resolve_spec(args.spec) if getattr(args, "spec", None) else None
+    profile_context = resolve_command_profile_context(args, spec_path=spec_path)
     return flow_command_ci_spec(
         args,
         require_dirs=require_dirs,
@@ -2867,6 +2939,7 @@ def command_ci_spec(args: argparse.Namespace) -> int:
         ci_report_root=CI_REPORT_ROOT,
         utc_now=utc_now,
         json_dumps=json_dumps,
+        profile_context=profile_context,
     )
 
 

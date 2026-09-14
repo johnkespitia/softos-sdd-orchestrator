@@ -1,0 +1,111 @@
+{
+  "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+  "generated_at": "2026-09-11T01:51:50+00:00",
+  "stage": "verification",
+  "summary": "Las slices ya tienen worktrees; el siguiente paso es verificar cada slice y cerrar CI.",
+  "spec": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+  "frontmatter_status": "approved",
+  "state_status": "slice-started",
+  "plan_exists": true,
+  "plan_path": ".flow/plans/2026-09-10-backend-owned-temporal-projection-contract.json",
+  "default_orchestrator": "bmad",
+  "orchestrator_source": "builtin-default",
+  "orchestrator_forced": false,
+  "default_spec_engine": "tessl",
+  "bmad_recommendation": {
+    "name": "quick-dev",
+    "path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+    "why": "Cada slice ya puede delegarse a un ejecutor con contexto cerrado."
+  },
+  "tessl_context": {
+    "tile": "workspace/spec-driven-workspace",
+    "index": ".tessl/tiles/workspace/spec-driven-workspace/index.md",
+    "verification": ".tessl/tiles/workspace/spec-driven-workspace/spec-verification.md"
+  },
+  "next_commands": [
+    "python3 ./flow slice verify 2026-09-10-backend-owned-temporal-projection-contract backend-broader-schedule-surfaces --json",
+    "python3 ./flow slice verify 2026-09-10-backend-owned-temporal-projection-contract dashboard-render-backend-temporal-fields --json",
+    "python3 ./flow slice verify 2026-09-10-backend-owned-temporal-projection-contract hub-render-backend-temporal-fields --json",
+    "python3 ./flow slice verify 2026-09-10-backend-owned-temporal-projection-contract temporal-contract-integration-review --json",
+    "python3 ./flow ci spec 2026-09-10-backend-owned-temporal-projection-contract --json",
+    "python3 ./flow ci repo --all --json"
+  ],
+  "subagents": [
+    {
+      "slice": "backend-temporal-projection-core",
+      "repo": "plg-platform-backend",
+      "branch": "feat/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core",
+      "worktree": "/workspace/.worktrees/plg-platform-backend-2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core",
+      "started": false,
+      "status": "verification-passed",
+      "recommended_workflow": "quick-dev",
+      "workflow_path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+      "handoff": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-handoff.md"
+    },
+    {
+      "slice": "diagnostic-class-backend-contract",
+      "repo": "plg-platform-backend",
+      "branch": "feat/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract",
+      "worktree": "/workspace/.worktrees/plg-platform-backend-2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract",
+      "started": false,
+      "status": "verification-passed",
+      "recommended_workflow": "quick-dev",
+      "workflow_path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+      "handoff": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-handoff.md"
+    },
+    {
+      "slice": "backend-broader-schedule-surfaces",
+      "repo": "plg-platform-backend",
+      "branch": "feat/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces",
+      "worktree": "/workspace/.worktrees/plg-platform-backend-2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces",
+      "started": true,
+      "status": "started",
+      "recommended_workflow": "quick-dev",
+      "workflow_path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+      "handoff": null
+    },
+    {
+      "slice": "dashboard-render-backend-temporal-fields",
+      "repo": "dashboard-frontend",
+      "branch": "feat/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields",
+      "worktree": "/workspace/.worktrees/dashboard-frontend-2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields",
+      "started": true,
+      "status": "started",
+      "recommended_workflow": "quick-dev",
+      "workflow_path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+      "handoff": null
+    },
+    {
+      "slice": "hub-render-backend-temporal-fields",
+      "repo": "hub-frontend",
+      "branch": "feat/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields",
+      "worktree": "/workspace/.worktrees/hub-frontend-2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields",
+      "started": true,
+      "status": "started",
+      "recommended_workflow": "quick-dev",
+      "workflow_path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+      "handoff": null
+    },
+    {
+      "slice": "temporal-contract-integration-review",
+      "repo": "plg-platform-harness",
+      "branch": "feat/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review",
+      "worktree": "/workspace/.worktrees/plg-platform-harness-2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review",
+      "started": true,
+      "status": "started",
+      "recommended_workflow": "quick-dev",
+      "workflow_path": "_bmad/bmm/workflows/bmad-quick-flow/quick-dev/workflow.md",
+      "handoff": null
+    }
+  ],
+  "story_cycle": {
+    "create_story": "_bmad/bmm/workflows/4-implementation/create-story/workflow.md",
+    "dev_story": "_bmad/bmm/workflows/4-implementation/dev-story/workflow.md",
+    "sprint_status": "_bmad/bmm/workflows/4-implementation/sprint-status/workflow.md"
+  },
+  "verified_slices": [
+    "backend-temporal-projection-core",
+    "diagnostic-class-backend-contract"
+  ],
+  "failed_slices": []
+}

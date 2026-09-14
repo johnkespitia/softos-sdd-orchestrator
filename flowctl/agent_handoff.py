@@ -4,9 +4,11 @@ import json
 import shutil
 import textwrap
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
 from flowctl.evidence import evidence_status_payload, write_evidence_bundle
+from flowctl.features import resolve_plan_json_path
+from flowctl.profiles import ProfileContext
 
 
 def _copy_if_exists(*, source: Path, destination_root: Path, rel: Callable[[Path], str]) -> dict[str, object] | None:
@@ -30,6 +32,8 @@ def agent_handoff_payload(
     root: Path,
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
+    profile_context: ProfileContext | None = None,
+    report_read_roots: Sequence[Path] | None = None,
 ) -> dict[str, object]:
     evidence = evidence_status_payload(
         slug=slug,
@@ -39,12 +43,15 @@ def agent_handoff_payload(
         report_root=report_root,
         rel=rel,
         utc_now=utc_now,
+        profile_context=profile_context,
+        report_read_roots=report_read_roots,
     )
     evidence_bundle = write_evidence_bundle(
         payload=evidence,
         evidence_report_root=evidence_report_root,
         root=root,
         rel=rel,
+        profile_context=profile_context,
     )
     plan_payload: dict[str, object] = {}
     if plan_path.is_file():
@@ -188,13 +195,21 @@ def command_agent_handoff(
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
     json_dumps: Callable[[object], str],
+    profile_context: ProfileContext | None = None,
+    plan_read_roots: Sequence[Path] | None = None,
+    report_read_roots: Sequence[Path] | None = None,
 ) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
+    plan_path = resolve_plan_json_path(
+        slug,
+        plan_root=plan_root,
+        plan_read_roots=plan_read_roots,
+    )
     payload = agent_handoff_payload(
         slug=slug,
         spec_path=spec_path,
-        plan_path=plan_root / f"{slug}.json",
+        plan_path=plan_path,
         state=read_state(slug),
         report_root=report_root,
         evidence_report_root=evidence_report_root,
@@ -202,6 +217,8 @@ def command_agent_handoff(
         root=root,
         rel=rel,
         utc_now=utc_now,
+        profile_context=profile_context,
+        report_read_roots=report_read_roots,
     )
     output = write_agent_handoff(payload=payload, handoff_report_root=handoff_report_root, rel=rel)
     if bool(getattr(args, "json", False)):

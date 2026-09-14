@@ -62,6 +62,13 @@ Usa el skill `workspace/skills-discover` cuando necesites buscar skills en tessl
 - `implementation agents`: execute slices with explicit write ownership.
 - `verification agent`: validates evidence and regression risk without expanding functional scope.
 
+Runtime role is assigned by `flow`, not by the model, vendor, or prompt. A
+standalone host-native agent run starts as `orchestrator`; nested runs default to
+`worker`, inherit the current parent run id, and require a new handoff. A child
+cannot explicitly elevate itself to `orchestrator`; `reviewer` remains an
+explicit role plus parent run id and handoff.
+Child runs do not inherit orchestration authority from this file.
+
 ### 2) Ownership rules
 
 - Each agent must receive explicit write ownership by file paths/patterns before execution starts.
@@ -91,6 +98,16 @@ Required gates:
 - `G6` closeout evidence/state consistency
 
 Rule: if a gate is not satisfied, do not advance to the next one.
+
+### 5) BMAD compatibility
+
+BMAD remains the workflow/intake/spec/planning layer. SoftOS runtime roles sit
+under that layer:
+
+`BMAD workflow -> approved spec/plan -> orchestrator -> worker/reviewer runs`.
+
+Workers and reviewers must not run BMAD/workflow orchestration, create child
+agents, self-approve, commit, push, merge, release, or publish.
 
 ## SoftOS operating playbooks
 

@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from flowctl.features import command_plan, command_slice_start, file_sha256, load_plan_and_slice
+from flowctl.features import (
+    command_plan,
+    command_slice_start,
+    file_sha256,
+    load_plan_and_slice,
+    update_plan_slice_status,
+)
 from flowctl.specs import (
     SpecConfig,
     analyze_spec,
@@ -609,6 +615,161 @@ def test_slice_start_uses_injected_policy_before_worktree(tmp_path: Path) -> Non
         )
 
     assert not worktree_root.exists()
+
+
+def test_load_plan_and_slice_prefers_profile_plan(tmp_path: Path) -> None:
+    legacy_root = tmp_path / ".flow" / "plans"
+    profile_root = tmp_path / ".flow" / "plans" / "plg"
+    legacy_root.mkdir(parents=True)
+    profile_root.mkdir(parents=True)
+    profile_plan = profile_root / "demo.json"
+    legacy_plan = legacy_root / "demo.json"
+    profile_plan.write_text(
+        json.dumps(
+            {
+                "feature": "demo",
+                "source": "profile",
+                "slices": [{"name": "api", "repo": "api", "targets": ["../../api/app/**"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    legacy_plan.write_text(
+        json.dumps(
+            {
+                "feature": "demo",
+                "source": "legacy",
+                "slices": [{"name": "api", "repo": "api", "targets": ["../../api/app/**"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan, selected, plan_path = load_plan_and_slice(
+        "demo",
+        "api",
+        plan_root=legacy_root,
+        plan_read_roots=[profile_root, legacy_root],
+        rel=lambda path: str(path),
+    )
+
+    assert plan_path == profile_plan
+    assert plan["source"] == "profile"
+    assert selected["name"] == "api"
+
+
+def test_load_plan_and_slice_falls_back_to_legacy_plan(tmp_path: Path) -> None:
+    legacy_root = tmp_path / ".flow" / "plans"
+    profile_root = tmp_path / ".flow" / "plans" / "plg"
+    legacy_root.mkdir(parents=True)
+    profile_root.mkdir(parents=True)
+    legacy_plan = legacy_root / "demo.json"
+    legacy_plan.write_text(
+        json.dumps(
+            {
+                "feature": "demo",
+                "source": "legacy",
+                "slices": [{"name": "api", "repo": "api", "targets": ["../../api/app/**"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan, selected, plan_path = load_plan_and_slice(
+        "demo",
+        "api",
+        plan_root=legacy_root,
+        plan_read_roots=[profile_root, legacy_root],
+        rel=lambda path: str(path),
+    )
+
+    assert plan_path == legacy_plan
+    assert plan["source"] == "legacy"
+    assert selected["name"] == "api"
+
+
+def test_load_plan_and_slice_default_uses_plan_root_only(tmp_path: Path) -> None:
+    legacy_root = tmp_path / ".flow" / "plans"
+    profile_root = tmp_path / ".flow" / "plans" / "plg"
+    profile_root.mkdir(parents=True)
+    profile_plan = profile_root / "demo.json"
+    profile_plan.write_text(
+        json.dumps(
+            {
+                "feature": "demo",
+                "source": "profile",
+                "slices": [{"name": "api", "repo": "api", "targets": ["../../api/app/**"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="No existe plan"):
+        load_plan_and_slice(
+            "demo",
+            "api",
+            plan_root=legacy_root,
+            rel=lambda path: str(path),
+        )
+
+    legacy_root.mkdir(parents=True, exist_ok=True)
+    legacy_plan = legacy_root / "demo.json"
+    legacy_plan.write_text(
+        json.dumps(
+            {
+                "feature": "demo",
+                "source": "legacy",
+                "slices": [{"name": "api", "repo": "api", "targets": ["../../api/app/**"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan, selected, plan_path = load_plan_and_slice(
+        "demo",
+        "api",
+        plan_root=legacy_root,
+        rel=lambda path: str(path),
+    )
+
+    assert plan_path == legacy_plan
+    assert plan["source"] == "legacy"
+    assert selected["name"] == "api"
+
+
+def test_update_plan_slice_status_updates_legacy_plan_when_profile_path_absent(
+    tmp_path: Path,
+) -> None:
+    legacy_root = tmp_path / ".flow" / "plans"
+    profile_root = tmp_path / ".flow" / "plans" / "plg"
+    legacy_root.mkdir(parents=True)
+    profile_root.mkdir(parents=True)
+    legacy_plan = legacy_root / "demo.json"
+    legacy_plan.write_text(
+        json.dumps(
+            {
+                "feature": "demo",
+                "source": "legacy",
+                "slices": [{"name": "api", "status": "slice-ready"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    update_plan_slice_status(
+        plan_root=legacy_root,
+        slug="demo",
+        slice_name="api",
+        status="verification-passed",
+        extra={"last_verification_result": "passed"},
+        plan_read_roots=[profile_root, legacy_root],
+    )
+
+    payload = json.loads(legacy_plan.read_text(encoding="utf-8"))
+    assert not (profile_root / "demo.json").exists()
+    assert payload["source"] == "legacy"
+    assert payload["slices"][0]["status"] == "verification-passed"
+    assert payload["slices"][0]["last_verification_result"] == "passed"
 
 
 def test_workflow_next_step_blocks_invalid_slice_governance(tmp_path: Path) -> None:

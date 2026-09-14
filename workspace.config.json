@@ -56,7 +56,18 @@
         "../../profiles/**/*.md",
         "../../profiles/**/*.json"
       ],
-      "runtime": "python"
+      "runtime": "python",
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
+      ]
     },
     "plg-platform-backend": {
       "path": "plg-platform-backend",
@@ -105,7 +116,10 @@
         "workspace/softos-worktree-hygiene",
         "workspace/spec-driven-workspace",
         "workspace/php-core",
-        "workspace/laravel-8"
+        "workspace/laravel-8",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
       ],
       "test_runner": "php",
       "test_hint": "../../plg-platform-backend/src/tests",
@@ -199,7 +213,10 @@
         "workspace/softos-worktree-hygiene",
         "workspace/spec-driven-workspace",
         "workspace/node-core",
-        "workspace/react-cra"
+        "workspace/react-cra",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
       ],
       "test_runner": "npm",
       "test_hint": "../../dashboard-frontend/src/src/**/*.test.{js,jsx,ts,tsx}",
@@ -291,7 +308,10 @@
         "workspace/node-core",
         "workspace/vite-expert",
         "workspace/react-expert",
-        "workspace/typescript-expert"
+        "workspace/typescript-expert",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
       ],
       "test_runner": "pnpm",
       "test_hint": "../../hub-frontend/src/**/*.{test,spec}.{ts,tsx}",
@@ -429,7 +449,7 @@
         "argv": [],
         "transport": "auto",
         "allow_cli_fallback": true,
-        "permission_policy": "reject",
+        "permission_policy": "allow_once",
         "acp": {"executable": "opencode-softos", "argv": ["acp"]}
       }
     }

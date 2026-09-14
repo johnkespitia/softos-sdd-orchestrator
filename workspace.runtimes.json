@@ -12,6 +12,10 @@
       "enabled": true,
       "source": "runtimes/node.runtime.json"
     },
+    "node-npm-react-cra": {
+      "enabled": true,
+      "source": "runtimes/node-npm-react-cra.runtime.json"
+    },
     "php": {
       "enabled": true,
       "source": "runtimes/php.runtime.json"

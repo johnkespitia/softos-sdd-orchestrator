@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-09-10T17:29:29+00:00",
+  "base": null,
+  "head": null,
+  "scope": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+  "items": [
+    {
+      "spec": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "status": "passed",
+      "frontmatter_status": "approved",
+      "schema_version": 3,
+      "repos": [
+        "plg-platform-harness",
+        "plg-platform-backend",
+        "dashboard-frontend",
+        "hub-frontend"
+      ],
+      "findings": []
+    }
+  ]
+}

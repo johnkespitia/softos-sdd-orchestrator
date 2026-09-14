@@ -123,7 +123,46 @@ run_check "flow stack doctor" python3 ./flow stack doctor >/dev/null
 run_check "flow workflow doctor" python3 ./flow workflow doctor --json >/dev/null
 run_check "flow skills doctor" python3 ./flow skills doctor >/dev/null
 run_check "flow providers doctor" python3 ./flow providers doctor >/dev/null
-run_check "flow submodule doctor" python3 ./flow submodule doctor --json >/dev/null
+
+SUBMODULE_DOCTOR_JSON="$(python3 ./flow submodule doctor --json || true)"
+if SUBMODULE_DOCTOR_JSON="$SUBMODULE_DOCTOR_JSON" python3 - <<'PY'
+from __future__ import annotations
+
+import json
+import os
+
+payload = json.loads(os.environ["SUBMODULE_DOCTOR_JSON"])
+required = ("exists", "registered", "initialized", "pointer_synced")
+invalid = [
+    item.get("repo", "unknown")
+    for item in payload.get("submodules", [])
+    if not all(bool(item.get(field)) for field in required)
+]
+raise SystemExit(1 if invalid else 0)
+PY
+then
+  pass "flow submodule doctor (registration/pointer)"
+else
+  fail "flow submodule doctor (registration/pointer)"
+fi
+
+DIRTY_SUBMODULES="$(SUBMODULE_DOCTOR_JSON="$SUBMODULE_DOCTOR_JSON" python3 - <<'PY'
+from __future__ import annotations
+
+import json
+import os
+
+payload = json.loads(os.environ["SUBMODULE_DOCTOR_JSON"])
+print(", ".join(
+    str(item.get("repo", "unknown"))
+    for item in payload.get("submodules", [])
+    if bool(item.get("dirty"))
+))
+PY
+)"
+if [[ -n "$DIRTY_SUBMODULES" ]]; then
+  warn "Submodules with local changes: $DIRTY_SUBMODULES"
+fi
 
 echo "== Compose contract checks =="
 if python3 - <<'PY'

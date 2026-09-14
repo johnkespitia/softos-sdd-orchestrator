@@ -1,7 +1,52 @@
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 from pathlib import Path
+
+
+GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+
+
+def resolve_submodule_gitlink(workspace_root: Path, repo_path: str) -> str:
+    normalized_path = repo_path.strip()
+    if not normalized_path:
+        raise ValueError("Submodule repo path is empty.")
+
+    commands = [
+        ["git", "ls-tree", "HEAD", "--", normalized_path],
+        ["git", "ls-files", "--stage", "--", normalized_path],
+    ]
+    last_error = "git ls-tree failed"
+    for command in commands:
+        result = subprocess.run(
+            command,
+            cwd=workspace_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            last_error = result.stderr.strip() or last_error
+            continue
+        fields = result.stdout.strip().split(maxsplit=3)
+        if command[1] == "ls-tree":
+            valid_gitlink = len(fields) >= 3 and fields[0] == "160000" and fields[1] == "commit"
+            gitlink_sha = fields[2].lower() if valid_gitlink else ""
+        else:
+            valid_gitlink = len(fields) >= 2 and fields[0] == "160000"
+            gitlink_sha = fields[1].lower() if valid_gitlink else ""
+        if valid_gitlink:
+            if not GIT_SHA_PATTERN.fullmatch(gitlink_sha):
+                raise ValueError(f"Invalid submodule gitlink SHA for '{normalized_path}'.")
+            return gitlink_sha
+
+    if last_error != "git ls-tree failed":
+        raise ValueError(f"Could not resolve gitlink for '{normalized_path}': {last_error}.")
+    raise ValueError(
+        f"No submodule gitlink found at '{normalized_path}' in HEAD or the index."
+    )
 
 
 def load_runtime_pack_map(workspace_root: Path) -> dict[str, dict[str, object]]:
@@ -89,7 +134,11 @@ def infer_tools(runtime_name: str, repo_cfg: dict[str, object], runtime_pack: di
     return needs_node, needs_php, needs_go, needs_python
 
 
-def build_repo_ci_matrices(workspace_config: dict[str, object], runtime_packs: dict[str, dict[str, object]]) -> dict[str, object]:
+def build_repo_ci_matrices(
+    workspace_config: dict[str, object],
+    runtime_packs: dict[str, dict[str, object]],
+    workspace_root: Path | None = None,
+) -> dict[str, object]:
     generic: list[dict[str, object]] = []
     delegated: list[dict[str, object]] = []
     repos = workspace_config.get("repos", {})
@@ -115,9 +164,10 @@ def build_repo_ci_matrices(workspace_config: dict[str, object], runtime_packs: d
         if not isinstance(ci_cfg, dict):
             ci_cfg = {}
         ci_mode = str(ci_cfg.get("mode", "")).strip().lower() or "inline"
+        repo_path = str(repo_cfg.get("path", repo_name)).strip() or repo_name
         entry = {
             "repo": repo_name,
-            "path": str(repo_cfg.get("path", repo_name)).strip() or repo_name,
+            "path": repo_path,
             "runtime": runtime_name or "unknown",
             "needs_node": needs_node,
             "needs_php": needs_php,
@@ -125,6 +175,26 @@ def build_repo_ci_matrices(workspace_config: dict[str, object], runtime_packs: d
             "needs_python": needs_python,
         }
         if ci_mode == "workflow-dispatch":
+            workflow_ref = str(ci_cfg.get("ref", "")).strip()
+            source_sha = str(ci_cfg.get("source_sha", "")).strip().lower()
+            if str(repo_cfg.get("repo_strategy", "")).strip().lower() == "submodule":
+                if workspace_root is None:
+                    raise ValueError(
+                        f"Workspace root is required to resolve submodule gitlink for '{repo_name}'."
+                    )
+                source_sha = resolve_submodule_gitlink(workspace_root, repo_path)
+            if not workflow_ref:
+                raise ValueError(
+                    f"Repo '{repo_name}' declares delegated CI but has no workflow ref."
+                )
+            if GIT_SHA_PATTERN.fullmatch(workflow_ref.lower()):
+                raise ValueError(
+                    f"Repo '{repo_name}' delegated CI workflow ref must be a branch or tag, not a SHA."
+                )
+            if not GIT_SHA_PATTERN.fullmatch(source_sha):
+                raise ValueError(
+                    f"Repo '{repo_name}' delegated CI has no valid source SHA."
+                )
             delegated.append(
                 {
                     **entry,
@@ -132,6 +202,8 @@ def build_repo_ci_matrices(workspace_config: dict[str, object], runtime_packs: d
                     "workflow_repository": str(ci_cfg.get("workflow_repository", "")).strip(),
                     "trigger_mode": str(ci_cfg.get("trigger_mode", "")).strip() or "workflow_dispatch_only",
                     "inputs": ci_cfg.get("inputs", {}) if isinstance(ci_cfg.get("inputs", {}), dict) else {},
+                    "workflow_ref": workflow_ref,
+                    "source_sha": source_sha,
                 }
             )
             continue

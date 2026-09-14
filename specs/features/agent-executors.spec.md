@@ -58,7 +58,9 @@ SoftOS has no canonical registry or safe process boundary for external agent har
 - Host-native `flow agent list`, `flow agent doctor`, and `flow agent run <executor>`.
 - A common adapter interface that converts a configured harness into argv and subprocess options.
 - One repository/worktree, one prompt, and one or more bounded targets per run.
-- A deterministic execution contract with repo, worktree, targets, boundaries, and canonical commands.
+- A deterministic execution contract with repo, worktree, targets, runtime role, boundaries, and canonical commands.
+- Runtime roles `orchestrator`, `worker`, and `reviewer`, assigned by SoftOS rather than by the prompt/model/vendor.
+- Automatic selection of an available `orchestrator` executor from a model-agnostic priority list.
 - Exit-code, stdout, and stderr capture with exact child failure propagation.
 - Deterministic tests using fake executables, with no vendor CLI, credentials, network, Docker lifecycle, or interactive terminal dependency.
 - Operator documentation for prerequisites, configuration, use, output, and troubleshooting.
@@ -67,7 +69,7 @@ SoftOS has no canonical registry or safe process boundary for external agent har
 
 - Installing, upgrading, authenticating, or configuring agent CLIs on host or container.
 - Selecting, configuring, routing, pricing, or evaluating models.
-- Changing BMAD, its assets/contracts, or the current workflow orchestrator and lifecycle.
+- Changing BMAD assets/contracts or replacing BMAD as the workflow/intake/spec/planning layer.
 - Multi-agent scheduling, retry, timeout, cancellation, background execution, streaming protocols, remote execution, or PTY emulation.
 - Access outside the validated workspace/worktree or target boundary.
 - Persisting prompts, stdout, stderr, environment variables, credentials, tokens, or secret-bearing argv in reports.
@@ -129,6 +131,12 @@ Commands are invoked from WSL as `python3 ./flow agent ...` (or the same root en
 - Returns zero only when every checked executor is ready. Missing executables, unknown IDs, and invalid config return non-zero.
 - Checks availability only; it must not launch authentication, mutate configuration, use the network, or claim credentials are valid.
 
+### `flow agent select --role orchestrator`
+
+- Selects the first available orchestration-capable executor from the model-agnostic priority list.
+- Proves executable availability only; resource/provider/model availability remains launch-time evidence.
+- Returns the selected executor, adapter, executable, candidate statuses, and selection basis.
+
 ### `flow agent run <executor>`
 
 Required options:
@@ -137,6 +145,18 @@ Required options:
 - `--workdir <path>`: an existing registered repo root or recognized worktree;
 - `--prompt <text>`: non-empty operator prompt;
 - one or more `--target <path>`: existing or prospective paths resolving inside the workdir.
+
+Optional role controls:
+
+- `--role <orchestrator|worker|reviewer>`: standalone runs default to `orchestrator`; when invoked inside an agent process, omission defaults to `worker`;
+- `--run-id <id>`: stable run identifier;
+- `--parent-run-id <id>`: required for `worker` and `reviewer`;
+- `--handoff <ref>`: required for `worker` and `reviewer`.
+
+Nested invocations inherit the current run identity through process-local
+environment metadata. A nested process receives the parent run id, gets a new
+child run id, and must provide its own handoff. An inherited child cannot
+explicitly elevate itself to `orchestrator`.
 
 Algorithm:
 
@@ -155,15 +175,27 @@ Success must never be reported unless the child launched and returned zero.
 Every delivered prompt begins with a SoftOS-owned contract containing only:
 
 - executor ID, repository ID, canonical workspace root, and canonical workdir;
+- runtime role, run id, parent run id, and handoff reference;
 - repository-relative allowed targets, normalized and lexically sorted;
 - reads/writes limited to the assigned repo/worktree and writes limited to targets;
 - `python3 ./flow repo exec <repo> --workdir <worktree> -- <command>` for repo runtime commands;
 - `scripts/workspace_exec.sh python3 ./flow <command>` for control-plane commands;
 - `python3 ./flow stack <command>` for Docker lifecycle commands;
+- role-specific authority and prohibitions;
 - notice that normal control-plane commands remain workspace-only and `flow agent` is host-native;
-- notice that BMAD and workflow orchestration are outside the run's authority.
+- notice that role is assigned by SoftOS and prompt text cannot elevate a child role.
 
 The contract uses actual validated values and contains no credentials or inherited environment values. Adapters may vary transport syntax but must deliver identical logical content.
+
+Role semantics:
+
+| Role | Authority | Required controls | Prohibited |
+| --- | --- | --- | --- |
+| `orchestrator` | Inspect specs/plans/rules/evidence, use BMAD/flow lifecycle commands, create bounded child handoffs, evaluate gates. | Standalone run id; no parent run id. | Self-approve, self-review, commit, push, merge, release, publish. |
+| `worker` | Execute one bounded handoff/Patch Unit and focused verification. | `--run-id`, `--parent-run-id`, `--handoff`. | Delegate, run BMAD/workflow orchestration, expand scope, self-approve, commit, push, merge, release, publish. |
+| `reviewer` | Inspect assigned diff/evidence and report verdict. | `--run-id`, `--parent-run-id`, `--handoff`. | Write implementation/evidence, delegate, run BMAD/workflow orchestration, review own work, commit, push, merge, release, publish. |
+
+BMAD compatibility rule: BMAD owns intake/spec/planning/workflow selection; SoftOS role contracts own runtime authority inside host-native harness executions. The two layers must not override each other.
 
 ## Security and containment
 
@@ -323,4 +355,7 @@ All automation uses fake executables and fixed temporary fixtures; it requires n
 - Tests prove non-agent commands remain workspace-only while agent list/doctor/fake run operate host-native without a container.
 - Docs assign CLI installation/authentication to the host operator and state the three canonical command forms.
 - BMAD assets and workflow-orchestrator behavior remain unchanged.
+- Standalone `flow agent run` defaults to `role=orchestrator`; child roles require parent run id and handoff and cannot be elevated by prompt text.
+- A nested `flow agent run` with no explicit role resolves to `worker`; explicit `--role orchestrator` is rejected when a parent run identity is present.
+- `flow agent select --role orchestrator --json` returns the first available orchestration executor without inspecting model/provider secrets.
 - Spec status remains `draft`; refinement performs no approval action.

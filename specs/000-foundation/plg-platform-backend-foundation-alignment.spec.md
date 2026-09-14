@@ -55,6 +55,7 @@ El repo es un submodulo con la aplicacion en `src/` y compose propio. El alta in
 - eliminar el servicio PHP duplicado del compose raiz
 - alinear la imagen de ejecucion con PHP 8.2, requerido por el lockfile vigente
 - registrar servicios, rutas, puertos y readiness efectivos
+- declarar una unica plantilla de entorno canonica bajo el application root
 - mantener el submodulo como unidad de implementacion independiente
 - verificar el endpoint publico `/api/v2/auto/health`
 
@@ -81,6 +82,7 @@ El repo es un submodulo con la aplicacion en `src/` y compose propio. El alta in
 - El estado `Up` no es suficiente: el healthcheck HTTP debe pasar.
 - Las rutas relativas de cada compose se resuelven desde el directorio que lo contiene.
 - Los comandos de implementacion deben poder ejecutarse sobre el repo base y sobre worktrees.
+- `src/.env.example` es la plantilla canonica; cualquier plantilla legado debe declararlo y conservar defaults seguros.
 
 ## Flujo principal
 
@@ -103,6 +105,7 @@ El repo es un submodulo con la aplicacion en `src/` y compose propio. El alta in
 - `flow stack ps` muestra web y MySQL saludables.
 - `curl -fsS http://127.0.0.1:8080/api/v2/auto/health` responde correctamente.
 - `flow spec review`, `flow spec approve` y `flow ci spec` pasan para esta spec.
+- El preflight y la CI materializan `src/.env` desde `src/.env.example`.
 
 ## Test plan
 

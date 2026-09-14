@@ -22,7 +22,10 @@
   "placeholder_files": {},
   "agent_skill_refs": [
     "workspace/php-core",
-    "workspace/laravel-8"
+    "workspace/laravel-8",
+    "workspace/softos-code-graph-playbook",
+    "workspace/softos-agent-memory-playbook",
+    "workspace/softos-agent-playbook"
   ],
   "ci": {
     "install": [

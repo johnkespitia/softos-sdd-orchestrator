@@ -25,6 +25,16 @@ Use this file as the root operational contract when the assistant does not load 
   - `flow release cut|promote|verify|publish`
   - `flow stack plan|apply`
 
+## Runtime agent roles
+
+When started through `flow agent run`, a standalone OpenCode process is an
+`orchestrator` by default. Nested OpenCode processes default to `worker`,
+inherit the current parent run id, and require a new canonical handoff;
+`reviewer` is explicit. A child cannot elevate itself to `orchestrator`.
+Workers execute only their assigned bounded task and do not run BMAD/workflow
+orchestration or create further agents. Reviewers are independent and read-only.
+The role comes from SoftOS, not from the prompt or OpenCode profile.
+
 ## CI delegation
 
 - If a repo declares project-owned CI in `workspace.config.json`, SoftOS root CI dispatches it.

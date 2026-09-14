@@ -15,6 +15,24 @@
       "args": [
         "/workspace/graphify-out/graph.json"
       ]
+    },
+    "graphify-hub-frontend": {
+      "command": "graphify-mcp",
+      "args": [
+        "/workspace/hub-frontend/graphify-out/graph.json"
+      ]
+    },
+    "graphify-dashboard-frontend": {
+      "command": "graphify-mcp",
+      "args": [
+        "/workspace/dashboard-frontend/graphify-out/graph.json"
+      ]
+    },
+    "graphify-plg-platform-backend": {
+      "command": "graphify-mcp",
+      "args": [
+        "/workspace/plg-platform-backend/graphify-out/graph.json"
+      ]
     }
   }
 }

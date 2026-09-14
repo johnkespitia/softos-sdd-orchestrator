@@ -4,10 +4,67 @@ import json
 import shutil
 import textwrap
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
-from flowctl.features import plan_approval_status_payload, spec_approval_status_payload
+from flowctl.features import (
+    plan_approval_status_payload,
+    resolve_plan_json_path,
+    spec_approval_status_payload,
+)
 from flowctl.policy import policy_check_payload
+from flowctl.profiles import ProfileContext
+
+
+def resolve_evidence_report_root(
+    evidence_report_root: Path,
+    *,
+    profile_context: ProfileContext | None = None,
+) -> Path:
+    """Select evidence bundle write root from profile context; keep legacy default otherwise."""
+    if profile_context is None or not profile_context.active:
+        return evidence_report_root
+    return Path(profile_context.write_roots.get("evidence", evidence_report_root))
+
+
+def resolve_report_scan_roots(
+    report_root: Path,
+    *,
+    profile_context: ProfileContext | None = None,
+    report_read_roots: Sequence[Path] | None = None,
+) -> list[Path]:
+    """Profile report roots first, then legacy report_root; preserve caller-supplied roots."""
+    if report_read_roots is not None:
+        roots = [Path(path) for path in report_read_roots]
+    elif profile_context is not None and profile_context.active:
+        roots = [Path(path) for path in profile_context.read_roots.get("reports", [report_root])]
+    else:
+        roots = [report_root]
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for path in roots:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(path)
+    return unique or [report_root]
+
+
+def resolve_evidence_plan_path(
+    slug: str,
+    *,
+    plan_root: Path,
+    profile_context: ProfileContext | None = None,
+    plan_read_roots: Sequence[Path] | None = None,
+) -> Path:
+    """Resolve plan JSON profile-first then legacy; preserve callers without profile context."""
+    if plan_read_roots is not None:
+        roots: Sequence[Path] | None = plan_read_roots
+    elif profile_context is not None and profile_context.active:
+        roots = profile_context.read_roots.get("plans")
+    else:
+        roots = None
+    return resolve_plan_json_path(slug, plan_root=plan_root, plan_read_roots=roots)
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -26,33 +83,44 @@ def _report_kind(report_root: Path, path: Path) -> str:
     return relative.parts[0] if len(relative.parts) > 1 else "root"
 
 
-def _matching_reports(*, report_root: Path, slug: str, rel: Callable[[Path], str]) -> list[dict[str, object]]:
-    if not report_root.exists():
-        return []
+def _matching_reports(
+    *,
+    report_roots: Sequence[Path],
+    slug: str,
+    rel: Callable[[Path], str],
+) -> list[dict[str, object]]:
     reports: list[dict[str, object]] = []
-    for path in sorted(report_root.rglob("*")):
-        if not path.is_file() or slug not in path.name or path.suffix not in {".json", ".md"}:
+    seen: set[Path] = set()
+    for report_root in report_roots:
+        if not report_root.exists():
             continue
-        item: dict[str, object] = {
-            "path": rel(path),
-            "kind": _report_kind(report_root, path),
-            "format": path.suffix.lstrip("."),
-            "size_bytes": path.stat().st_size,
-            "mtime_ns": path.stat().st_mtime_ns,
-        }
-        if item["kind"] in {"evidence", "agent-handoffs"}:
-            continue
-        if path.suffix == ".json":
-            payload = _read_json(path)
-            for key in ("status", "engine_status", "scope", "generated_at", "json_report"):
-                if key in payload:
-                    item[key] = payload[key]
-            items = payload.get("items")
-            if isinstance(items, list) and items:
-                first = items[0]
-                if isinstance(first, dict) and "status" in first:
-                    item["item_status"] = first["status"]
-        reports.append(item)
+        for path in sorted(report_root.rglob("*")):
+            if not path.is_file() or slug not in path.name or path.suffix not in {".json", ".md"}:
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            item: dict[str, object] = {
+                "path": rel(path),
+                "kind": _report_kind(report_root, path),
+                "format": path.suffix.lstrip("."),
+                "size_bytes": path.stat().st_size,
+                "mtime_ns": path.stat().st_mtime_ns,
+            }
+            if item["kind"] in {"evidence", "agent-handoffs"}:
+                continue
+            if path.suffix == ".json":
+                payload = _read_json(path)
+                for key in ("status", "engine_status", "scope", "generated_at", "json_report"):
+                    if key in payload:
+                        item[key] = payload[key]
+                items = payload.get("items")
+                if isinstance(items, list) and items:
+                    first = items[0]
+                    if isinstance(first, dict) and "status" in first:
+                        item["item_status"] = first["status"]
+            reports.append(item)
     return reports
 
 
@@ -65,6 +133,8 @@ def evidence_status_payload(
     report_root: Path,
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
+    profile_context: ProfileContext | None = None,
+    report_read_roots: Sequence[Path] | None = None,
 ) -> dict[str, object]:
     spec_status = spec_approval_status_payload(spec_path=spec_path, slug=slug, state=state, rel=rel)
     plan_status = plan_approval_status_payload(
@@ -85,7 +155,12 @@ def evidence_status_payload(
         )
         for stage in ("plan", "slice-start", "workflow-run", "release")
     }
-    reports = _matching_reports(report_root=report_root, slug=slug, rel=rel)
+    scan_roots = resolve_report_scan_roots(
+        report_root,
+        profile_context=profile_context,
+        report_read_roots=report_read_roots,
+    )
+    reports = _matching_reports(report_roots=scan_roots, slug=slug, rel=rel)
     ci_spec_reports = [
         report
         for report in reports
@@ -152,12 +227,17 @@ def write_evidence_bundle(
     evidence_report_root: Path,
     root: Path,
     rel: Callable[[Path], str],
+    profile_context: ProfileContext | None = None,
 ) -> dict[str, object]:
     slug = str(payload["feature"])
-    bundle_root = evidence_report_root / slug
+    selected_evidence_root = resolve_evidence_report_root(
+        evidence_report_root,
+        profile_context=profile_context,
+    )
+    bundle_root = selected_evidence_root / slug
     bundle_root.mkdir(parents=True, exist_ok=True)
-    bundle_json = evidence_report_root / f"{slug}-evidence-bundle.json"
-    bundle_md = evidence_report_root / f"{slug}-evidence-bundle.md"
+    bundle_json = selected_evidence_root / f"{slug}-evidence-bundle.json"
+    bundle_md = selected_evidence_root / f"{slug}-evidence-bundle.md"
     bundled_files: list[dict[str, object]] = []
     for report in payload.get("reports", []):
         if not isinstance(report, dict):
@@ -212,17 +292,27 @@ def command_evidence_status(
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
     json_dumps: Callable[[object], str],
+    profile_context: ProfileContext | None = None,
+    plan_read_roots: Sequence[Path] | None = None,
+    report_read_roots: Sequence[Path] | None = None,
 ) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
     payload = evidence_status_payload(
         slug=slug,
         spec_path=spec_path,
-        plan_path=plan_root / f"{slug}.json",
+        plan_path=resolve_evidence_plan_path(
+            slug,
+            plan_root=plan_root,
+            profile_context=profile_context,
+            plan_read_roots=plan_read_roots,
+        ),
         state=read_state(slug),
         report_root=report_root,
         rel=rel,
         utc_now=utc_now,
+        profile_context=profile_context,
+        report_read_roots=report_read_roots,
     )
     if bool(getattr(args, "json", False)):
         print(json_dumps(payload))
@@ -248,23 +338,34 @@ def command_evidence_bundle(
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
     json_dumps: Callable[[object], str],
+    profile_context: ProfileContext | None = None,
+    plan_read_roots: Sequence[Path] | None = None,
+    report_read_roots: Sequence[Path] | None = None,
 ) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
     payload = evidence_status_payload(
         slug=slug,
         spec_path=spec_path,
-        plan_path=plan_root / f"{slug}.json",
+        plan_path=resolve_evidence_plan_path(
+            slug,
+            plan_root=plan_root,
+            profile_context=profile_context,
+            plan_read_roots=plan_read_roots,
+        ),
         state=read_state(slug),
         report_root=report_root,
         rel=rel,
         utc_now=utc_now,
+        profile_context=profile_context,
+        report_read_roots=report_read_roots,
     )
     bundle_payload = write_evidence_bundle(
         payload=payload,
         evidence_report_root=evidence_report_root,
         root=root,
         rel=rel,
+        profile_context=profile_context,
     )
     if bool(getattr(args, "json", False)):
         print(json_dumps(bundle_payload))

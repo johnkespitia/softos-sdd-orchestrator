@@ -1,0 +1,15 @@
+{
+  "id": "plg",
+  "name": "PLG Platform",
+  "spec_roots": [
+    "specs/features/plg"
+  ],
+  "deliverables": {
+    "plans": ".flow/plans/plg",
+    "reports": ".flow/reports/plg",
+    "ci_reports": ".flow/reports/ci/plg",
+    "evidence": ".flow/evidence/plg",
+    "runs": ".flow/runs/plg",
+    "state": ".flow/state/plg"
+  }
+}

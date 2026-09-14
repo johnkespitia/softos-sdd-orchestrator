@@ -12,9 +12,16 @@ required_services: []
 required_capabilities:
   - laravel8
 targets:
+  - ../../.github/workflows/root-ci.yml
+  - ../../scripts/ci/discover_repo_ci_matrix.py
+  - ../../scripts/ci/run_project_workflow.sh
+  - ../../flowctl/repo_ci_matrix.py
+  - ../../flowctl/test_repo_ci_matrix.py
   - ../../workspace.config.json
   - ../../plg-platform-backend/AGENTS.md
   - ../../plg-platform-backend/.github/**
+  - ../../plg-platform-backend/src/app/**
+  - ../../plg-platform-backend/src/config/**
   - ../../plg-platform-backend/src/composer.json
   - ../../plg-platform-backend/src/composer.lock
   - ../../plg-platform-backend/src/phpunit.xml
@@ -43,6 +50,8 @@ La CI generica no encuentra `composer.json`, no prepara el entorno Laravel corre
 - comandos Composer y PHPUnit con workdir `src/`
 - taxonomia unit, feature y smoke
 - workflow CI delegado y disparado por el root SoftOS
+- resolucion del ref delegado desde el commit gitlink del submodulo
+- estabilizacion de la suite PHPUnit vigente sin relajar aserciones
 - convenciones de estilo existentes de PHP/Laravel
 
 ### No incluye
@@ -68,11 +77,12 @@ La instalacion usa el lockfile, PHPUnit ejecuta sus suites reales y el root bloq
 - Todo comando PHP parte de `src/` o usa `--working-dir=src`.
 - La CI delegada solo acepta `workflow_dispatch`.
 - Los tests que necesitan MySQL reciben un servicio aislado de CI.
+- El ref y SHA usados para descubrir el run delegado pertenecen al repositorio hijo.
 
 ## Flujo principal
 
 1. Root CI descubre el backend como delegado.
-2. Despacha `repo-ci.yml` en el commit del submodulo.
+2. Resuelve el gitlink del submodulo y despacha `repo-ci.yml` en ese commit.
 3. El workflow instala dependencias, prepara Laravel y ejecuta PHPUnit.
 4. Root CI espera resultado binario antes de integracion.
 
@@ -89,12 +99,15 @@ La instalacion usa el lockfile, PHPUnit ejecuta sus suites reales y el root bloq
 - El workflow hijo no contiene triggers `push` ni `pull_request`.
 - Composer utiliza `src/composer.lock`.
 - PHPUnit puede ejecutar al menos una prueba unitaria y una feature.
+- La suite PHPUnit completa termina sin errores ni fallos.
+- La matriz delegada expone el SHA gitlink cuando el repo usa estrategia `submodule`.
 - Los gates de spec pasan.
 
 ## Test plan
 
 - [@test] ../../plg-platform-backend/src/tests/Unit/Logging/DatadogLoggerTest.php
 - [@test] ../../plg-platform-backend/src/tests/Feature/AutoV2ScaffoldTest.php
+- [@test] ../../flowctl/test_repo_ci_matrix.py
 
 ## Verification Matrix
 
@@ -106,7 +119,7 @@ La instalacion usa el lockfile, PHPUnit ejecuta sus suites reales y el root bloq
   environments: [local]
 - name: backend-acceptance-tests
   level: integration
-  command: php -d memory_limit=512M src/vendor/bin/phpunit -c src/phpunit.xml src/tests/Feature/AutoV2ScaffoldTest.php
+  command: php -d memory_limit=512M src/vendor/bin/phpunit -c src/phpunit.xml
   blocking_on: [ci]
   environments: [local]
 ```

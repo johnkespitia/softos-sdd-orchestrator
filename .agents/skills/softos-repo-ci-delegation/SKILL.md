@@ -33,6 +33,7 @@ Optional:
 "ci": {
   "mode": "workflow-dispatch",
   "workflow": "repo-ci.yml",
+  "ref": "main",
   "workflow_repository": "owner/project-repo",
   "trigger_mode": "workflow_dispatch_only",
   "inputs": {
@@ -41,6 +42,11 @@ Optional:
   }
 }
 ```
+
+`ref` is the branch or tag containing the workflow definition. For submodule
+repos, SoftOS resolves the gitlink commit separately and passes it to the child
+workflow as the required `source_sha` input. Do not pass a raw commit SHA as
+`workflow_dispatch.ref`; GitHub accepts a branch or tag for that field.
 
 ## Child workflow rules
 
@@ -56,8 +62,15 @@ Optionally:
 ```yaml
 on:
   workflow_dispatch:
-    inputs: ...
+    inputs:
+      source_sha:
+        required: true
+        type: string
 ```
+
+The child workflow must validate `source_sha` and use it in
+`actions/checkout@v4` so CI tests the exact commit recorded by the root
+submodule gitlink.
 
 Forbidden for delegated child workflows:
 

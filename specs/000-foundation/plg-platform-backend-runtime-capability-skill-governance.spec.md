@@ -2,7 +2,7 @@
 schema_version: 2
 name: PLG Platform Backend Runtime Capability Skill Governance
 description: Registrar runtime, capability y skills tecnicas compatibles con el backend Laravel 8.
-status: draft
+status: approved
 owner: platform
 depends_on:
   - specs/000-foundation/plg-platform-backend-foundation-alignment.spec.md

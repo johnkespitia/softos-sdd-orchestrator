@@ -20,7 +20,8 @@ Use this skill as the default operating guide for any non-trivial task in this w
 
 1. Read the root spec first if the task touches system behavior, orchestration, or multiple repos.
 2. Resolve repo/runtime context from `workspace.config.json`.
-3. Prefer `flow` commands over direct file edits for lifecycle actions:
+3. Load/apply `workspace/softos-code-graph-playbook` and `workspace/softos-agent-memory-playbook` when navigating or changing code; run `flow code-graph status` for the active repo and refresh if stale/missing before broad exploration. Use Graphify MCP as the preferred structural query path.
+4. Prefer `flow` commands over direct file edits for lifecycle actions:
    - `flow spec review|approve`
    - `flow plan`
    - `flow workflow next-step|execute-feature|run`

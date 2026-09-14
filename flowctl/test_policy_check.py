@@ -95,6 +95,107 @@ class PolicyCheckTests(unittest.TestCase):
             self.assertIn("spec_approval:missing_approval", captured["blocked_reasons"])
             self.assertIn("plan_approval:missing_plan", captured["blocked_reasons"])
 
+    def test_command_policy_check_prefers_profile_plan_when_both_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = root / "sample.spec.md"
+            legacy_root = root / ".flow" / "plans"
+            profile_root = root / ".flow" / "plans" / "plg"
+            legacy_root.mkdir(parents=True)
+            profile_root.mkdir(parents=True)
+            profile_plan = profile_root / "sample.json"
+            legacy_plan = legacy_root / "sample.json"
+            spec_path.write_text("---\nname: Sample\nstatus: approved\n---\n# Sample\n", encoding="utf-8")
+            profile_plan.write_text('{"feature":"sample","source":"profile","slices":[]}\n', encoding="utf-8")
+            legacy_plan.write_text('{"feature":"sample","source":"legacy","slices":[]}\n', encoding="utf-8")
+            captured: dict[str, object] = {}
+
+            def capture(payload: object) -> str:
+                self.assertIsInstance(payload, dict)
+                captured.update(payload)
+                return _json_dumps(payload)
+
+            rc = command_policy_check(
+                Namespace(spec="sample", stage="slice-start", json=True),
+                resolve_spec=lambda _spec: spec_path,
+                spec_slug=lambda _path: "sample",
+                plan_root=legacy_root,
+                plan_read_roots=[profile_root, legacy_root],
+                read_state=lambda _slug: {},
+                rel=lambda path: str(path.relative_to(root)),
+                json_dumps=capture,
+            )
+
+            self.assertEqual(2, rc)
+            self.assertEqual(".flow/plans/plg/sample.json", captured["plan_path"])
+            self.assertIn("spec_approval:missing_approval", captured["blocked_reasons"])
+            self.assertNotIn("plan_approval:missing_plan", captured["blocked_reasons"])
+
+    def test_command_policy_check_falls_back_to_legacy_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = root / "sample.spec.md"
+            legacy_root = root / ".flow" / "plans"
+            profile_root = root / ".flow" / "plans" / "plg"
+            legacy_root.mkdir(parents=True)
+            profile_root.mkdir(parents=True)
+            legacy_plan = legacy_root / "sample.json"
+            spec_path.write_text("---\nname: Sample\nstatus: approved\n---\n# Sample\n", encoding="utf-8")
+            legacy_plan.write_text('{"feature":"sample","source":"legacy","slices":[]}\n', encoding="utf-8")
+            captured: dict[str, object] = {}
+
+            def capture(payload: object) -> str:
+                self.assertIsInstance(payload, dict)
+                captured.update(payload)
+                return _json_dumps(payload)
+
+            rc = command_policy_check(
+                Namespace(spec="sample", stage="slice-start", json=True),
+                resolve_spec=lambda _spec: spec_path,
+                spec_slug=lambda _path: "sample",
+                plan_root=legacy_root,
+                plan_read_roots=[profile_root, legacy_root],
+                read_state=lambda _slug: {},
+                rel=lambda path: str(path.relative_to(root)),
+                json_dumps=capture,
+            )
+
+            self.assertEqual(2, rc)
+            self.assertEqual(".flow/plans/sample.json", captured["plan_path"])
+            self.assertIn("spec_approval:missing_approval", captured["blocked_reasons"])
+            self.assertNotIn("plan_approval:missing_plan", captured["blocked_reasons"])
+
+    def test_command_policy_check_default_ignores_profile_scoped_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = root / "sample.spec.md"
+            legacy_root = root / ".flow" / "plans"
+            profile_root = root / ".flow" / "plans" / "plg"
+            profile_root.mkdir(parents=True)
+            profile_plan = profile_root / "sample.json"
+            spec_path.write_text("---\nname: Sample\nstatus: approved\n---\n# Sample\n", encoding="utf-8")
+            profile_plan.write_text('{"feature":"sample","source":"profile","slices":[]}\n', encoding="utf-8")
+            captured: dict[str, object] = {}
+
+            def capture(payload: object) -> str:
+                self.assertIsInstance(payload, dict)
+                captured.update(payload)
+                return _json_dumps(payload)
+
+            rc = command_policy_check(
+                Namespace(spec="sample", stage="slice-start", json=True),
+                resolve_spec=lambda _spec: spec_path,
+                spec_slug=lambda _path: "sample",
+                plan_root=legacy_root,
+                read_state=lambda _slug: {},
+                rel=lambda path: str(path.relative_to(root)),
+                json_dumps=capture,
+            )
+
+            self.assertEqual(2, rc)
+            self.assertEqual(".flow/plans/sample.json", captured["plan_path"])
+            self.assertIn("plan_approval:missing_plan", captured["blocked_reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()
