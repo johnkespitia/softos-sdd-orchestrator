@@ -316,6 +316,12 @@ def _release_scope_drift_findings(
         if not isinstance(result, dict):
             findings.append(f"La slice `{slice_name}` no tiene inventario de scope drift; verifica la slice antes del release.")
             continue
+        if result.get("scope_checked") is False or result.get("planned_worktree_exists") is False:
+            # A verification performed against the current checkout is allowed for
+            # local-only closeout when the planned slice worktree was never
+            # materialized. Its changed_files inventory includes unrelated,
+            # pre-existing workspace changes and is not a valid scope-drift signal.
+            continue
         if "changed_files" not in result:
             findings.append(
                 f"La slice `{slice_name}` fue verificada sin inventario `changed_files`; vuelve a ejecutar `slice verify`."
@@ -739,6 +745,32 @@ def _render_release_notes(*, version: str, release_date: str, sections: dict[str
     return "\n".join(changelog_lines).rstrip() + "\n", "\n".join(release_lines).rstrip()
 
 
+def _latest_check_runs(check_runs: list[object]) -> list[dict[str, object]]:
+    """Return only the newest attempt for each GitHub check-run name."""
+    latest_by_name: dict[str, dict[str, object]] = {}
+    for check in check_runs:
+        if not isinstance(check, dict):
+            continue
+        name = str(check.get("name", "")).strip() or "<unnamed>"
+        current = latest_by_name.get(name)
+        if current is None:
+            latest_by_name[name] = check
+            continue
+        current_key = (
+            str(current.get("started_at", "")),
+            str(current.get("completed_at", "")),
+            int(current.get("id", 0) or 0),
+        )
+        candidate_key = (
+            str(check.get("started_at", "")),
+            str(check.get("completed_at", "")),
+            int(check.get("id", 0) or 0),
+        )
+        if candidate_key > current_key:
+            latest_by_name[name] = check
+    return list(latest_by_name.values())
+
+
 def _prepend_changelog_entry(*, changelog_path: Path, entry: str) -> None:
     current = changelog_path.read_text(encoding="utf-8")
     first_release_header = current.find("\n## ")
@@ -947,6 +979,8 @@ def _verify_release_from_manifest(
         if not isinstance(check_runs, list):
             check_runs = []
         total_runs = len(check_runs)
+        effective_check_runs = _latest_check_runs(check_runs)
+        repo_item["check_runs_effective"] = len(effective_check_runs)
         repo_item["check_runs_total"] = total_runs
         if total_runs == 0:
             repo_item["pipeline_status"] = "missing"
@@ -961,7 +995,7 @@ def _verify_release_from_manifest(
 
         non_completed = 0
         non_passing = 0
-        for check in check_runs:
+        for check in effective_check_runs:
             if not isinstance(check, dict):
                 continue
             status = str(check.get("status", "")).strip()
@@ -1160,6 +1194,8 @@ def command_release_cut(
 
     dirty_repo_findings: list[str] = []
     for repo in sorted(repos_involved):
+        if bool(getattr(args, "local_only", False)) and repo == root_repo:
+            continue
         changed_files, git_error = git_changed_files(repo_root(repo))
         if git_error:
             dirty_repo_findings.append(f"No pude inspeccionar cambios locales de `{repo}`: {git_error}")
@@ -1209,6 +1245,7 @@ def command_release_cut(
         "version": version,
         "generated_at": utc_now(),
         "root_sha": repo_head_sha(root_repo),
+        "root_local_only": bool(getattr(args, "local_only", False)),
         "repos": manifest_repos,
         "features": features,
         "promotions": [],
