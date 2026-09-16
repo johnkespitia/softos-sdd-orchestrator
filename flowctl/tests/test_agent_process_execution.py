@@ -1110,6 +1110,7 @@ class ResourceProcessOverlayTests(unittest.TestCase):
                 resource=prepared.resource,
                 inherited_env={
                     "PATH": "/usr/bin",
+                    "CODEX_SANDBOX_NETWORK_DISABLED": "1",
                     OPENCODE_CONFIG_CONTENT_ENV: json.dumps(
                         {"default_agent": "softos-local-worker"}
                     ),
@@ -1125,6 +1126,7 @@ class ResourceProcessOverlayTests(unittest.TestCase):
         self.assertEqual("standalone-orchestrator", env[ROLE_ENV_RUN_ID])
         self.assertEqual("", env[ROLE_ENV_PARENT_RUN_ID])
         self.assertEqual("", env[ROLE_ENV_HANDOFF])
+        self.assertNotIn("CODEX_SANDBOX_NETWORK_DISABLED", env)
         self.assertEqual(
             json.dumps({"default_agent": "softos-local-worker"}),
             env[OPENCODE_CONFIG_CONTENT_ENV],

@@ -51,6 +51,15 @@ CLOUD_SCRUB_ENV_KEYS = frozenset(
     }
 )
 
+# The host launcher may itself run inside Codex's managed sandbox. This marker
+# belongs to the parent tool process, not to the executor being launched. If it
+# is forwarded, cloud/host executors inherit restrictions such as disabled DNS.
+HOST_LAUNCHER_SCRUB_ENV_KEYS = frozenset(
+    {
+        "CODEX_SANDBOX_NETWORK_DISABLED",
+    }
+)
+
 _FORBIDDEN_OVERLAY_ENV_KEY_RE = re.compile(
     r"(TOKEN|SECRET|CREDENTIAL|PASSWORD|PASSWD|API[_-]?KEY|AUTH)",
     re.IGNORECASE,
@@ -981,7 +990,7 @@ def run_agent_process(
         effective_env = merge_process_environment(
             dict(os.environ if inherited_env is None else inherited_env),
             env_overlay or {},
-            scrub_keys=scrub_env_keys,
+            scrub_keys=scrub_env_keys | HOST_LAUNCHER_SCRUB_ENV_KEYS,
         )
     transport_used = "cli"
     fallback_reason: Optional[str] = None
@@ -1033,7 +1042,7 @@ def run_agent_process(
             cwd=workdir,
             subprocess_run=subprocess_run,
             env_overlay=env_overlay,
-            scrub_env_keys=scrub_env_keys,
+            scrub_env_keys=scrub_env_keys | HOST_LAUNCHER_SCRUB_ENV_KEYS,
             inherited_env=inherited_env,
         )
 
