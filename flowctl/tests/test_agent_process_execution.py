@@ -978,6 +978,7 @@ class ResourceProcessOverlayTests(unittest.TestCase):
                 resource=prepared.resource,
                 inherited_env={
                     "PATH": "/usr/bin",
+                    "CODEX_SANDBOX_NETWORK_DISABLED": "1",
                     OPENCODE_CONFIG_CONTENT_ENV: json.dumps(
                         {"default_agent": "softos-local-worker"}
                     ),
