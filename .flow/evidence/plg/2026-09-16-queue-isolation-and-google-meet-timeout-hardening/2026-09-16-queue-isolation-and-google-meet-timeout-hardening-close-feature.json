@@ -1,0 +1,12 @@
+{
+  "feature": "2026-09-16-queue-isolation-and-google-meet-timeout-hardening",
+  "generated_at": "2026-09-17T17:47:25+00:00",
+  "spec": "specs/features/plg/2026-09-16-queue-isolation-and-google-meet-timeout-hardening.spec.md",
+  "plan_path": ".flow/plans/plg/2026-09-16-queue-isolation-and-google-meet-timeout-hardening.json",
+  "closed_slices": [
+    "queue-isolation-invariant-and-caps",
+    "meet-retry-after-and-stop-conditions",
+    "focused-tests-and-evidence"
+  ],
+  "state_status": "ready-for-merge"
+}

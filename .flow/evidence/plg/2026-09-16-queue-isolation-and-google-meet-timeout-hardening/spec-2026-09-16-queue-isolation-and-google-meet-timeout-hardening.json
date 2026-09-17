@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-09-17T14:23:15+00:00",
+  "base": null,
+  "head": null,
+  "scope": "2026-09-16-queue-isolation-and-google-meet-timeout-hardening",
+  "items": [
+    {
+      "spec": "specs/features/plg/2026-09-16-queue-isolation-and-google-meet-timeout-hardening.spec.md",
+      "status": "passed",
+      "frontmatter_status": "approved",
+      "schema_version": 3,
+      "repos": [
+        "plg-platform-harness",
+        "plg-platform-backend"
+      ],
+      "findings": []
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "feature": "2026-09-16-queue-isolation-and-google-meet-timeout-hardening",
+  "generated_at": "2026-09-17T17:58:22+00:00",
+  "stage": "release-complete",
+  "summary": "La feature ya fue liberada; no corresponde relanzar planning ni ejecucion.",
+  "spec": "specs/features/plg/2026-09-16-queue-isolation-and-google-meet-timeout-hardening.spec.md",
+  "frontmatter_status": "released",
+  "state_status": "released",
+  "plan_exists": true,
+  "plan_path": ".flow/plans/plg/2026-09-16-queue-isolation-and-google-meet-timeout-hardening.json",
+  "default_orchestrator": "bmad",
+  "orchestrator_source": "builtin-default",
+  "orchestrator_forced": false,
+  "default_spec_engine": "tessl",
+  "bmad_recommendation": {
+    "name": "none",
+    "path": "",
+    "why": "La feature ya llego a estado terminal `released`."
+  },
+  "tessl_context": {
+    "tile": "workspace/spec-driven-workspace",
+    "index": ".tessl/tiles/workspace/spec-driven-workspace/index.md",
+    "verification": ".tessl/tiles/workspace/spec-driven-workspace/spec-verification.md"
+  },
+  "next_commands": [
+    "python3 ./flow release status --version queue-isolation-meet-timeout-hardening-2026-09-17"
+  ],
+  "subagents": [],
+  "story_cycle": {
+    "create_story": "_bmad/bmm/workflows/4-implementation/create-story/workflow.md",
+    "dev_story": "_bmad/bmm/workflows/4-implementation/dev-story/workflow.md",
+    "sprint_status": "_bmad/bmm/workflows/4-implementation/sprint-status/workflow.md"
+  },
+  "verified_slices": [],
+  "failed_slices": []
+}
