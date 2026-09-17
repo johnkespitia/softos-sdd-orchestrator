@@ -9,7 +9,7 @@
       ],
       "enabled": true,
       "environment": {
-        "ENGRAM_PROJECT": "softos-sdd-orchestrator",
+        "ENGRAM_PROJECT": "plg-platform-harness",
         "ENGRAM_DATA_DIR": "/workspace/.flow/memory/engram"
       }
     },
@@ -18,6 +18,30 @@
       "command": [
         "graphify-mcp",
         "/workspace/graphify-out/graph.json"
+      ],
+      "enabled": true
+    },
+    "graphify-hub-frontend": {
+      "type": "local",
+      "command": [
+        "graphify-mcp",
+        "/workspace/hub-frontend/graphify-out/graph.json"
+      ],
+      "enabled": true
+    },
+    "graphify-dashboard-frontend": {
+      "type": "local",
+      "command": [
+        "graphify-mcp",
+        "/workspace/dashboard-frontend/graphify-out/graph.json"
+      ],
+      "enabled": true
+    },
+    "graphify-plg-platform-backend": {
+      "type": "local",
+      "command": [
+        "graphify-mcp",
+        "/workspace/plg-platform-backend/graphify-out/graph.json"
       ],
       "enabled": true
     }

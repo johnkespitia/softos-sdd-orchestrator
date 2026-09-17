@@ -1,14 +1,10 @@
 {
   "project": {
-    "display_name": "Flow SDD Orchestrator Boilerplate",
-    "root_repo": "sdd-workspace-boilerplate",
-    "workflow": {
-      "default_orchestrator": "bmad",
-      "force_orchestrator": true
-    }
+    "display_name": "PLG Platform Harness",
+    "root_repo": "plg-platform-harness"
   },
   "repos": {
-    "sdd-workspace-boilerplate": {
+    "plg-platform-harness": {
       "path": ".",
       "kind": "root",
       "slice_prefix": "root",
@@ -39,6 +35,7 @@
         "runtimes",
         "workspace.capabilities.json",
         "workspace.config.json",
+        "workspace.preflight.json",
         "workspace.providers.json",
         "workspace.runtimes.json",
         "workspace.secrets.json",
@@ -59,35 +56,295 @@
         "../../profiles/**/*.md",
         "../../profiles/**/*.json"
       ],
-      "runtime": "python"
-    }
-  },
-  "gateway": {
-    "execution": {
-      "auto_plan": false
+      "runtime": "python",
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
+      ]
     },
-    "transforms": {
-      "github": [
-        {
-          "op": "strip_prefix",
-          "field": "title",
-          "prefix": "[bot] "
-        }
+    "plg-platform-backend": {
+      "path": "plg-platform-backend",
+      "compose_service": "web-server",
+      "compose_file": "plg-platform-backend/docker-compose.yaml",
+      "kind": "implementation",
+      "runtime": "php-laravel8-apache",
+      "capabilities": [
+        "laravel8"
       ],
-      "slack": [],
-      "jira": []
+      "repo_strategy": "submodule",
+      "slice_prefix": "plg-platform-backend",
+      "default_targets": [
+        "../../plg-platform-backend/src/**"
+      ],
+      "target_roots": [
+        ".github",
+        "AGENTS.md",
+        "Makefile",
+        "docker-compose.yaml",
+        "php.Dockerfile",
+        ".env.example",
+        "config",
+        "src",
+        "src/tests"
+      ],
+      "contract_roots": [
+        ".github",
+        "AGENTS.md",
+        "Makefile",
+        "docker-compose.yaml",
+        "php.Dockerfile",
+        ".env.example",
+        "config",
+        "src",
+        "src/tests"
+      ],
+      "test_required_roots": [
+        "src"
+      ],
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/php-core",
+        "workspace/laravel-8",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
+      ],
+      "test_runner": "php",
+      "test_hint": "../../plg-platform-backend/src/tests",
+      "ci": {
+        "mode": "workflow-dispatch",
+        "workflow": "repo-ci.yml",
+        "workflow_repository": "PLGEducation/plg-platform-backend",
+        "ref": "main",
+        "trigger_mode": "workflow_dispatch_only",
+        "install": [
+          "composer",
+          "--working-dir=src",
+          "install",
+          "--no-interaction",
+          "--prefer-dist"
+        ],
+        "test": [
+          "php",
+          "-d",
+          "memory_limit=512M",
+          "src/vendor/bin/phpunit",
+          "-c",
+          "src/phpunit.xml"
+        ]
+      }
     },
-    "feedback_templates": {
-      "workflow.intake": "Task `{task_id}` intent=`{intent}` status=`{status}`\n{body}"
+    "dashboard-frontend": {
+      "path": "dashboard-frontend",
+      "compose_service": "front-app",
+      "compose_file": "dashboard-frontend/docker-compose.yaml",
+      "kind": "implementation",
+      "runtime": "node-npm-react-cra",
+      "capabilities": [
+        "react-cra"
+      ],
+      "repo_strategy": "submodule",
+      "slice_prefix": "dashboard-frontend",
+      "default_targets": [
+        "../../dashboard-frontend/src/src/**",
+        "../../dashboard-frontend/src/public/**",
+        "../../dashboard-frontend/package.json",
+        "../../dashboard-frontend/src/package.json"
+      ],
+      "target_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "package-lock.json",
+        "src/package.json",
+        "src/package-lock.json",
+        "src/public",
+        "src/src",
+        "tests"
+      ],
+      "contract_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "package-lock.json",
+        "src/package.json",
+        "src/package-lock.json",
+        "src/public",
+        "src/src",
+        "tests"
+      ],
+      "test_required_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "package-lock.json",
+        "src/package.json",
+        "src/package-lock.json",
+        "src/public",
+        "src/src",
+        "tests"
+      ],
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/node-core",
+        "workspace/react-cra",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
+      ],
+      "test_runner": "npm",
+      "test_hint": "../../dashboard-frontend/src/src/**/*.test.{js,jsx,ts,tsx}",
+      "ci": {
+        "install": [
+          "sh",
+          "-lc",
+          "npm ci && npm --prefix src ci"
+        ],
+        "test": [
+          "sh",
+          "-lc",
+          "CI=true npm --prefix src test -- --watchAll=false"
+        ],
+        "build": [
+          "npm",
+          "--prefix",
+          "src",
+          "run",
+          "build"
+        ]
+      }
     },
-    "spec_inbound_lint": {
-      "reject_on_error": false
+    "hub-frontend": {
+      "path": "hub-frontend",
+      "compose_service": "hub-front",
+      "compose_file": "hub-frontend/docker-compose.yaml",
+      "kind": "implementation",
+      "runtime": "node",
+      "capabilities": [
+        "vite-react",
+        "typescript"
+      ],
+      "repo_strategy": "submodule",
+      "slice_prefix": "hub-frontend",
+      "default_targets": [
+        "../../hub-frontend/src/**",
+        "../../hub-frontend/index.html",
+        "../../hub-frontend/vite.config.ts",
+        "../../hub-frontend/package.json"
+      ],
+      "target_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "pnpm-lock.yaml",
+        "index.html",
+        "vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "tailwind.config.mjs",
+        "public",
+        "src",
+        "tests"
+      ],
+      "contract_roots": [
+        ".github",
+        "AGENTS.md",
+        "README.md",
+        "docker-compose.yaml",
+        "node.Dockerfile",
+        "package.json",
+        "pnpm-lock.yaml",
+        "index.html",
+        "vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "tailwind.config.mjs",
+        "public",
+        "src",
+        "tests"
+      ],
+      "test_required_roots": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "src",
+        "tests"
+      ],
+      "agent_skill_refs": [
+        "workspace/softos-spec-definition-playbook",
+        "workspace/softos-reference-spec-hardening",
+        "workspace/softos-schema-hardening-gates",
+        "workspace/softos-staging-promote-preflight",
+        "workspace/softos-worktree-hygiene",
+        "workspace/spec-driven-workspace",
+        "workspace/node-core",
+        "workspace/vite-expert",
+        "workspace/react-expert",
+        "workspace/typescript-expert",
+        "workspace/softos-code-graph-playbook",
+        "workspace/softos-agent-memory-playbook",
+        "workspace/softos-agent-playbook"
+      ],
+      "test_runner": "pnpm",
+      "test_hint": "../../hub-frontend/src/**/*.{test,spec}.{ts,tsx}",
+      "ci": {
+        "mode": "workflow-dispatch",
+        "workflow": "repo-ci.yml",
+        "workflow_repository": "PLGEducation/hub-frontend",
+        "ref": "main",
+        "trigger_mode": "workflow_dispatch_only",
+        "install": [
+          "pnpm",
+          "install",
+          "--frozen-lockfile"
+        ],
+        "test": [
+          "pnpm",
+          "test"
+        ],
+        "lint": [
+          "pnpm",
+          "lint"
+        ],
+        "build": [
+          "pnpm",
+          "build"
+        ]
+      }
     }
   },
   "memory": {
     "agent": {
       "provider": "engram",
-      "project": "softos-sdd-orchestrator",
+      "project": "plg-platform-harness",
       "data_dir": ".flow/memory/engram",
       "source_boundary": "consultive"
     },

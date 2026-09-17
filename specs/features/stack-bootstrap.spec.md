@@ -73,7 +73,7 @@ Revisar y confirmar en frontmatter: `repo_code`, `compose_service`, `port`, `env
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | ../../specs/**/*.spec.md, ../../docs/**/*.md, ../../flow, ../../workspace.config.json, ../../workspace.stack.json |
+| `plg-platform-harness` | ../../specs/**/*.spec.md, ../../docs/**/*.md, ../../flow, ../../workspace.config.json, ../../workspace.stack.json |
 
 ## Resultado esperado
 

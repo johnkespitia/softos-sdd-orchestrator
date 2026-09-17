@@ -86,7 +86,7 @@ Eliminar la inconsistencia entre el frontmatter de una spec y el estado operativ
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/specs.py`, `../../flowctl/ci.py`, `../../flowctl/features.py`, `../../flowctl/workflows.py`, `../../flowctl/release.py`, `../../flowctl/infra.py`, `../../flowctl/stack_design.py`, `../../flowctl/test_ci_spec.py`, `../../flowctl/test_release_verify.py`, `../../docs/spec-driven-sdlc-map.md`, `../../docs/softos-agent-dev-handbook.md` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/specs.py`, `../../flowctl/ci.py`, `../../flowctl/features.py`, `../../flowctl/workflows.py`, `../../flowctl/release.py`, `../../flowctl/infra.py`, `../../flowctl/stack_design.py`, `../../flowctl/test_ci_spec.py`, `../../flowctl/test_release_verify.py`, `../../docs/spec-driven-sdlc-map.md`, `../../docs/softos-agent-dev-handbook.md` |
 
 ## Resultado esperado
 

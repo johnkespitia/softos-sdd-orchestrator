@@ -9,8 +9,9 @@ import sqlite3
 import subprocess
 import textwrap
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
+from .profiles import ProfileContext, artifact_candidates, first_existing_path
 from .specs import (
     frontmatter_status_allows_execution,
     frontmatter_status_is_terminal,
@@ -69,14 +70,52 @@ def normalize_acceptance_criteria(values: object) -> list[str]:
     return deduped
 
 
+def resolve_plan_write_root(
+    plan_root: Path,
+    *,
+    profile_context: ProfileContext | None = None,
+) -> Path:
+    """Select plan write root from profile context; keep legacy default otherwise."""
+    if profile_context is None or not profile_context.active:
+        return plan_root
+    return Path(profile_context.write_roots.get("plans", plan_root))
+
+
+def resolve_report_write_root(
+    report_root: Path,
+    *,
+    profile_context: ProfileContext | None = None,
+) -> Path:
+    """Select report write root from profile context; keep legacy default otherwise."""
+    if profile_context is None or not profile_context.active:
+        return report_root
+    return Path(profile_context.write_roots.get("reports", report_root))
+
+
+def resolve_plan_json_path(
+    slug: str,
+    *,
+    plan_root: Path,
+    plan_read_roots: Sequence[Path] | None = None,
+) -> Path:
+    """Resolve plan JSON preferring profile-scoped roots, then legacy plan_root."""
+    roots = list(plan_read_roots) if plan_read_roots else [plan_root]
+    return first_existing_path(artifact_candidates(roots, f"{slug}.json"))
+
+
 def load_plan_and_slice(
     slug: str,
     slice_name: str,
     *,
     plan_root: Path,
     rel: Callable[[Path], str],
+    plan_read_roots: Sequence[Path] | None = None,
 ) -> tuple[dict[str, object], dict[str, object], Path]:
-    plan_path = plan_root / f"{slug}.json"
+    plan_path = resolve_plan_json_path(
+        slug,
+        plan_root=plan_root,
+        plan_read_roots=plan_read_roots,
+    )
     if not plan_path.exists():
         raise SystemExit(f"No existe plan para '{slug}'. Ejecuta `python3 ./flow plan {slug}` primero.")
 
@@ -96,8 +135,13 @@ def update_plan_slice_status(
     slice_name: str,
     status: str,
     extra: dict[str, object] | None = None,
+    plan_read_roots: Sequence[Path] | None = None,
 ) -> None:
-    plan_path = plan_root / f"{slug}.json"
+    plan_path = resolve_plan_json_path(
+        slug,
+        plan_root=plan_root,
+        plan_read_roots=plan_read_roots,
+    )
     if not plan_path.exists():
         return
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
@@ -394,8 +438,14 @@ def command_spec_review(
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
     json_dumps: Callable[[object], str],
+    profile_context: ProfileContext | None = None,
 ) -> int:
     require_dirs()
+    selected_report_root = resolve_report_write_root(
+        report_root,
+        profile_context=profile_context,
+    )
+    selected_report_root.mkdir(parents=True, exist_ok=True)
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
     analysis = analyze_spec(spec_path)
@@ -435,7 +485,7 @@ def command_spec_review(
         low_priority.append(f"El estado `{status}` no forma parte del flujo principal esperado.")
 
     ready_to_approve = not high_priority and not medium_priority
-    report_path = report_root / f"{slug}-spec-review.md"
+    report_path = selected_report_root / f"{slug}-spec-review.md"
     report = textwrap.dedent(
         f"""\
         # Spec Review
@@ -740,13 +790,18 @@ def command_plan_approval_status(
     read_state: Callable[[str], dict[str, object]],
     rel: Callable[[Path], str],
     json_dumps: Callable[[object], str],
+    plan_read_roots: Sequence[Path] | None = None,
 ) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
     payload = plan_approval_status_payload(
         slug=slug,
         spec_path=spec_path,
-        plan_path=plan_root / f"{slug}.json",
+        plan_path=resolve_plan_json_path(
+            slug,
+            plan_root=plan_root,
+            plan_read_roots=plan_read_roots,
+        ),
         state=read_state(slug),
         rel=rel,
     )
@@ -773,10 +828,15 @@ def command_plan_approve(
     write_state: Callable[[str, dict[str, object]], None],
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
+    plan_read_roots: Sequence[Path] | None = None,
 ) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
-    plan_path = plan_root / f"{slug}.json"
+    plan_path = resolve_plan_json_path(
+        slug,
+        plan_root=plan_root,
+        plan_read_roots=plan_read_roots,
+    )
     if not plan_path.exists():
         raise SystemExit(f"No existe plan para `{slug}`. Ejecuta `python3 ./flow plan {slug}` primero.")
     state = read_state(slug)
@@ -826,8 +886,14 @@ def command_plan(
     ensure_remote_claim_for_plan: Callable[[str], None] | None,
     rel: Callable[[Path], str],
     utc_now: Callable[[], str],
+    profile_context: ProfileContext | None = None,
 ) -> int:
     require_dirs()
+    selected_plan_root = resolve_plan_write_root(
+        plan_root,
+        profile_context=profile_context,
+    )
+    selected_plan_root.mkdir(parents=True, exist_ok=True)
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
     analysis = analyze_spec(spec_path)
@@ -921,8 +987,8 @@ def command_plan(
         "slices": slices,
     }
 
-    plan_json = plan_root / f"{slug}.json"
-    plan_md = plan_root / f"{slug}.md"
+    plan_json = selected_plan_root / f"{slug}.json"
+    plan_md = selected_plan_root / f"{slug}.md"
     plan_json.write_text(json.dumps(plan_payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
     lines = [

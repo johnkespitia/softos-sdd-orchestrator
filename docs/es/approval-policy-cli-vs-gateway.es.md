@@ -6,7 +6,7 @@ Source: `docs/approval-policy-cli-vs-gateway.md`
 Last updated: 2026-05-07
 
 **Version:** 1.0 (documento versionado en repositorio)  
-**Alcance:** workspace SoftOS / `sdd-workspace-boilerplate`
+**Alcance:** workspace SoftOS / `plg-platform-harness`
 
 ## Regla
 

@@ -4,7 +4,7 @@ English source: [docs/agent-executors.md](../agent-executors.md)
 
 Source: `docs/agent-executors.md`
 
-SoftOS registra harnesses de agentes nativos del host en la sección de nivel superior `agents` de `workspace.config.json`. V1 declara `codex`, `cursor` y `opencode-local`.
+SoftOS registra harnesses de agentes nativos del host en la sección de nivel superior `agents` de `workspace.config.json`. V1 declara `codex`, `cursor`, `opencode` y `opencode-local`. Los ejecutores con ACP pueden usar `transport: "auto"` para preferir ACP y caer a CLI antes de enviar el prompt.
 
 ## Requisitos previos del host
 
@@ -37,7 +37,9 @@ Ejecuta estos en el host WSL (no se proxyan al contenedor del workspace):
 python3 ./flow agent list
 python3 ./flow agent doctor
 python3 ./flow agent doctor codex
+python3 ./flow agent select --role orchestrator --json
 python3 ./flow agent run <executor> --repo <repo> --workdir <path> --prompt "<text>" --target <path>
+python3 ./flow agent run <executor> --repo <repo> --workdir <path> --prompt "<text>" --target <path> --transport acp
 ```
 
 ### Ejemplos
@@ -73,9 +75,20 @@ python3 ./flow agent run opencode-local \
 
 - `agent list` valida el registro e imprime el id, adapter y ejecutable configurado de cada executor en orden lexicográfico.
 - `agent doctor` resuelve ejecutables mediante el `PATH` del host (o comprueba rutas absolutas) e informa `ready` o `missing`. No inspecciona credenciales, no llama APIs del vendor ni demuestra que la autenticación funciona.
-- `agent run` valida los límites de repo/worktree/target, prefija el prompt del operador con el contrato de ejecución de SoftOS, invoca el ejecutable configurado con una secuencia argv (`shell=False`), captura stdout/stderr y devuelve el exit code exacto del proceso hijo. No persiste prompts, salida capturada, valores de entorno ni argv renderizado.
+- `agent select --role orchestrator` selecciona el primer executor disponible con capacidad de orquestación desde la prioridad agnóstica al modelo.
+- `agent run` valida los límites de repo/worktree/target, prefija el prompt del operador con el contrato de ejecución de SoftOS, invoca el transporte configurado con una secuencia argv (`shell=False`), captura/transmite stdout/stderr, emite evidencia de ejecución solo con metadata y devuelve el exit code exacto del proceso hijo. No persiste prompts, salida capturada, valores de entorno ni argv renderizado.
 
 El resto de comandos `flow` normales siguen siendo solo del workspace.
+
+## Roles runtime
+
+Cada ejecución tiene un rol asignado por SoftOS:
+
+- `orchestrator` es el default para una invocación standalone del host. Puede leer specs/planes, usar comandos lifecycle de BMAD/flow, crear handoffs de workers/reviewers y evaluar gates.
+- `worker` ejecuta un handoff o Patch Unit acotado. No puede delegar, ejecutar BMAD/workflow orchestration ni expandir alcance.
+- `reviewer` inspecciona un paquete de diff/evidencia asignado. Es independiente y read-only por contrato.
+
+Workers y reviewers deben entregar `--run-id`, `--parent-run-id` y `--handoff`. Si `flow agent run` se ejecuta dentro de otro agente y se omite `--role`, SoftOS lo resuelve como `worker`, deriva el parent del run actual y exige un handoff nuevo. Un hijo heredado no puede solicitar `--role orchestrator`. El rol viene de SoftOS; el texto del prompt no puede elevar un hijo a orquestador.
 
 ## Formas de comando del adapter
 
@@ -105,15 +118,50 @@ SoftOS nunca añade `--model`, `--provider`, `--full-auto` ni flags similares de
   "agents": {
     "schema_version": 1,
     "executors": {
-      "codex": {"adapter": "codex", "executable": "codex", "argv": []},
-      "cursor": {"adapter": "cursor", "executable": "agent", "argv": []},
-      "opencode-local": {"adapter": "opencode", "executable": "opencode", "argv": []}
+      "codex": {
+        "adapter": "codex",
+        "executable": "codex",
+        "argv": [],
+        "transport": "auto",
+        "allow_cli_fallback": true,
+        "permission_policy": "reject",
+        "acp": {"executable": "codex-acp", "argv": []}
+      },
+      "cursor": {
+        "adapter": "cursor",
+        "executable": "agent",
+        "argv": [],
+        "transport": "auto",
+        "allow_cli_fallback": true,
+        "permission_policy": "reject",
+        "acp": {"executable": "agent", "argv": ["acp"], "auth_method": "cursor_login"}
+      },
+      "opencode": {
+        "adapter": "opencode",
+        "executable": "opencode",
+        "argv": [],
+        "transport": "auto",
+        "allow_cli_fallback": true,
+        "permission_policy": "reject",
+        "acp": {"executable": "opencode", "argv": ["acp"]}
+      },
+      "opencode-local": {
+        "adapter": "opencode",
+        "executable": "opencode-softos",
+        "argv": [],
+        "transport": "auto",
+        "allow_cli_fallback": true,
+        "permission_policy": "reject",
+        "acp": {"executable": "opencode-softos", "argv": ["acp"]}
+      }
     }
   }
 }
 ```
 
-Los campos inválidos del registro terminan con exit distinto de cero y un diagnóstico específico del campo.
+Las entradas que omiten `transport` conservan la ruta CLI legacy. Los transportes soportados son `cli`, `acp` y `auto`; `auto` prueba ACP primero y cae a CLI solo antes de enviar el prompt cuando `allow_cli_fallback` es true. Los campos inválidos del registro terminan con exit distinto de cero y un diagnóstico específico del campo.
+
+`flow agent run` escribe una línea `SOFTOS_EXECUTION_EVIDENCE` en stderr con `transport_requested`, `transport_used`, `acp_session_id`, `fallback_reason`, resultado normalizado, estado de cancelación, decisiones de permisos y clase de fallo. Ver [ACP Executor Runtime V1](../acp-executor-runtime.md).
 
 ## Solución de problemas
 

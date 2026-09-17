@@ -121,7 +121,7 @@ Eso aumenta:
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/parser.py`, `../../flowctl/features.py`, `../../flowctl/test_gateway_ops.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../README.md`, `../../specs/features/softos-slave-remote-operator-ergonomics.spec.md` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/parser.py`, `../../flowctl/features.py`, `../../flowctl/test_gateway_ops.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../README.md`, `../../specs/features/softos-slave-remote-operator-ergonomics.spec.md` |
 
 ## Resultado esperado
 

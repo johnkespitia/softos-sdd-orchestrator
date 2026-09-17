@@ -1,0 +1,17 @@
+{
+  "title": "Create React App Frontend",
+  "summary": "Existing React 18 application built with Create React App under a nested src package.",
+  "required_runtimes": ["node-npm-react-cra"],
+  "target_roots": [
+    "package.json",
+    "package-lock.json",
+    "src/package.json",
+    "src/package-lock.json",
+    "src/public",
+    "src/src"
+  ],
+  "agent_skill_refs": [
+    "workspace/react-cra"
+  ],
+  "placeholder_files": {}
+}

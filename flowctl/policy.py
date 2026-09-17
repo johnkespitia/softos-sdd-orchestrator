@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
-from flowctl.features import plan_approval_status_payload, spec_approval_status_payload
+from flowctl.features import (
+    plan_approval_status_payload,
+    resolve_plan_json_path,
+    spec_approval_status_payload,
+)
 
 
 POLICY_STAGES = ("plan", "slice-start", "workflow-run", "release")
@@ -95,6 +99,7 @@ def command_policy_check(
     read_state: Callable[[str], dict[str, object]],
     rel: Callable[[Path], str],
     json_dumps: Callable[[object], str],
+    plan_read_roots: Sequence[Path] | None = None,
 ) -> int:
     spec_path = resolve_spec(args.spec)
     slug = spec_slug(spec_path)
@@ -102,7 +107,11 @@ def command_policy_check(
         stage=str(args.stage),
         slug=slug,
         spec_path=spec_path,
-        plan_path=plan_root / f"{slug}.json",
+        plan_path=resolve_plan_json_path(
+            slug,
+            plan_root=plan_root,
+            plan_read_roots=plan_read_roots,
+        ),
         state=read_state(slug),
         rel=rel,
     )

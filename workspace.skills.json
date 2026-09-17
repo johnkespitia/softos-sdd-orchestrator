@@ -59,6 +59,16 @@
       "notes": "Skill local para inventariar, preservar y limpiar worktrees operativas al cierre de una ejecucion SoftOS."
     },
     {
+      "name": "workspace/softos-coding-execution-supervisor",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-coding-execution-supervisor",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Separa el orquestador de los workers y reviewers desde el inicio de cada ejecucion."
+    },
+    {
       "name": "workspace/skills-discover",
       "provider": "tessl",
       "kind": "tile",
@@ -77,6 +87,116 @@
       "required": true,
       "sync": false,
       "notes": "Tile local ya vendorizado y gobernado por tessl.json."
+    },
+    {
+      "name": "workspace/python-core",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/python-core",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "requires": []
+    },
+    {
+      "name": "workspace/php-core",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/php-core",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contrato tecnico local para PHP y Composer en repos SoftOS."
+    },
+    {
+      "name": "workspace/laravel-8",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/laravel-8",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contexto tecnico local para mantener la aplicacion Laravel 8 existente sin upgrades implicitos."
+    },
+    {
+      "name": "workspace/node-core",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/node-core",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contrato tecnico local para Node.js y npm en repos SoftOS."
+    },
+    {
+      "name": "workspace/react-cra",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/react-cra",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Contexto tecnico del dashboard React existente basado en Create React App."
+    },
+    {
+      "name": "workspace/vite-expert",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/vite-expert",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Convenciones Vite para frontends SoftOS con Vitest y servidor de desarrollo en Compose."
+    },
+    {
+      "name": "workspace/react-expert",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/react-expert",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Convenciones React 18 para frontends Vite con layout por features."
+    },
+    {
+      "name": "workspace/typescript-expert",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/typescript-expert",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Convenciones TypeScript estrictas para repos Node SoftOS."
+    },
+    {
+      "name": "workspace/softos-code-graph-playbook",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-code-graph-playbook",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Graphify proactive use: auto-generate code graphs for agent context without user prompting."
+    },
+    {
+      "name": "workspace/softos-agent-memory-playbook",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-agent-memory-playbook",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "Engram companion skill for agent memory management and recall."
+    },
+    {
+      "name": "workspace/softos-agent-playbook",
+      "provider": "tessl",
+      "kind": "skill",
+      "source": ".agents/skills/softos-agent-playbook",
+      "enabled": true,
+      "required": true,
+      "sync": false,
+      "notes": "SoftOS default ops playbook for agent lifecycle and orchestration."
     }
   ]
 }

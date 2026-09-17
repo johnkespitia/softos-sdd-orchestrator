@@ -135,7 +135,7 @@ La spec debe cerrar esa brecha sin abrir todavía decisiones autónomas de imple
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/features.py`, `../../flowctl/parser.py`, `../../flowctl/test_gateway_ops.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../README.md`, `../../workspace.config.json`, `../../specs/features/softos-slave-autonomous-claim-to-plan.spec.md` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/features.py`, `../../flowctl/parser.py`, `../../flowctl/test_gateway_ops.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../README.md`, `../../workspace.config.json`, `../../specs/features/softos-slave-autonomous-claim-to-plan.spec.md` |
 
 ## Resultado esperado
 

@@ -1,0 +1,52 @@
+{
+  "runtime_kind": "project",
+  "target_roots": [
+    ".github",
+    "AGENTS.md",
+    "README.md",
+    "docker-compose.yaml",
+    "node.Dockerfile",
+    "package.json",
+    "package-lock.json",
+    "src/package.json",
+    "src/package-lock.json",
+    "src/public",
+    "src/src"
+  ],
+  "default_targets": [
+    "../../{path}/src/src/**",
+    "../../{path}/src/public/**",
+    "../../{path}/package.json",
+    "../../{path}/src/package.json"
+  ],
+  "test_runner": "npm",
+  "test_hint": "../../{path}/src/src/**/*.test.{js,jsx,ts,tsx}",
+  "test_required_roots": [
+    "package.json",
+    "package-lock.json",
+    "src/package.json",
+    "src/package-lock.json",
+    "src/src"
+  ],
+  "placeholder_dirs": [],
+  "placeholder_files": {},
+  "agent_skill_refs": [
+    "workspace/softos-spec-definition-playbook",
+    "workspace/softos-reference-spec-hardening",
+    "workspace/softos-schema-hardening-gates",
+    "workspace/softos-staging-promote-preflight",
+    "workspace/softos-worktree-hygiene",
+    "workspace/spec-driven-workspace",
+    "workspace/node-core",
+    "workspace/softos-code-graph-playbook",
+    "workspace/softos-agent-memory-playbook",
+    "workspace/softos-agent-playbook"
+  ],
+  "ci": {
+    "install": ["sh", "-lc", "npm ci && npm --prefix src ci"],
+    "test": ["sh", "-lc", "CI=true npm --prefix src test -- --watchAll=false"],
+    "build": ["npm", "--prefix", "src", "run", "build"]
+  },
+  "compose": null,
+  "notes": "Runtime para el dashboard React existente: Node 20, npm y Create React App bajo src/. El Compose es propiedad del repositorio."
+}

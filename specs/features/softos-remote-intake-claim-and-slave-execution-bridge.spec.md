@@ -106,7 +106,7 @@ Sin ese bridge, el registro remoto sirve como ledger, pero no como plano operati
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/**`, `../../gateway/app/**`, `../../gateway/tests/**`, `../../scripts/bootstrap_workspace.py`, `../../docs/**`, `../../README.md`, `../../workspace.config.json` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/**`, `../../gateway/app/**`, `../../gateway/tests/**`, `../../scripts/bootstrap_workspace.py`, `../../docs/**`, `../../README.md`, `../../workspace.config.json` |
 
 ## Resultado esperado
 

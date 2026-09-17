@@ -107,7 +107,7 @@ Los cierres operativos ya materializados para esta spec deben quedar reflejados 
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/**`, `../../gateway/app/**`, `../../gateway/tests/**`, `../../scripts/**`, `../../docs/**`, `../../.github/workflows/**`, `../../workspace.providers.json`, `../../workspace.secrets.json` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/**`, `../../gateway/app/**`, `../../gateway/tests/**`, `../../scripts/**`, `../../docs/**`, `../../.github/workflows/**`, `../../workspace.providers.json`, `../../workspace.secrets.json` |
 
 ## Plan por olas
 

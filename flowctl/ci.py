@@ -11,8 +11,19 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+from flowctl.profiles import ProfileContext
 from flowctl.secret_scan import is_advisory_secret_finding
 from flowctl.specs import frontmatter_status_allows_strict_ci, slice_governance_findings, verification_matrix_findings
+
+
+def resolve_ci_report_root(
+    ci_report_root: Path,
+    *,
+    profile_context: ProfileContext | None = None,
+) -> Path:
+    if profile_context is None or not profile_context.active:
+        return ci_report_root
+    return Path(profile_context.write_roots.get("ci_reports", ci_report_root))
 
 
 def _normalize_relative_repo_paths(values: list[str]) -> list[str]:
@@ -284,8 +295,11 @@ def command_ci_spec(
     ci_report_root: Path,
     utc_now: Callable[[], str],
     json_dumps: Callable[[object], str],
+    profile_context: ProfileContext | None = None,
 ) -> int:
     require_dirs()
+    selected_ci_report_root = resolve_ci_report_root(ci_report_root, profile_context=profile_context)
+    selected_ci_report_root.mkdir(parents=True, exist_ok=True)
     spec_paths = select_spec_paths(
         args.spec,
         all_specs=args.all,
@@ -388,8 +402,8 @@ def command_ci_spec(
         report_lines.append("")
 
     report_key = slugify(args.spec or ("changed" if args.changed else "all")) or "all"
-    json_path = ci_report_root / f"spec-{report_key}.json"
-    md_path = ci_report_root / f"spec-{report_key}.md"
+    json_path = selected_ci_report_root / f"spec-{report_key}.json"
+    md_path = selected_ci_report_root / f"spec-{report_key}.md"
     payload = {
         "generated_at": utc_now(),
         "base": args.base,
@@ -818,8 +832,12 @@ def command_ci_integration(
             service_name = repo_compose_service(repo)
             if runner == "php":
                 smoke_commands[service_name] = ["sh", "-lc", "php --version >/dev/null"]
-            elif runner == "pnpm":
-                smoke_commands[service_name] = ["sh", "-lc", "node --version >/dev/null && pnpm --version >/dev/null"]
+            elif runner in {"pnpm", "npm"}:
+                smoke_commands[service_name] = [
+                    "sh",
+                    "-lc",
+                    f"node --version >/dev/null && {runner} --version >/dev/null",
+                ]
             elif runner == "go":
                 smoke_commands[service_name] = ["go", "version"]
 
@@ -850,16 +868,17 @@ def command_ci_integration(
                         add_check("FAIL", "app", f"Bootstrap {service_name}", "`composer install` fallo.")
                     else:
                         add_check("PASS", "app", f"Bootstrap {service_name}", "`composer install` ok.")
-                elif runner == "pnpm" and (repo_path / "package.json").exists():
+                elif runner in {"pnpm", "npm"} and (repo_path / "package.json").exists():
+                    package_manager = runner
                     bc = capture_compose(
                         compose_exec_args(service_name, interactive=False, workdir=cwd)
-                        + ["sh", "-lc", "pnpm install --frozen-lockfile 2>/dev/null || pnpm install"]
+                        + ["sh", "-lc", f"{package_manager} ci"]
                     )
                     if int(bc["returncode"]) != 0:
-                        findings.append(f"Bootstrap pnpm fallo en `{service_name}`.")
-                        add_check("FAIL", "app", f"Bootstrap {service_name}", "`pnpm install` fallo.")
+                        findings.append(f"Bootstrap {package_manager} fallo en `{service_name}`.")
+                        add_check("FAIL", "app", f"Bootstrap {service_name}", f"`{package_manager} ci` fallo.")
                     else:
-                        add_check("PASS", "app", f"Bootstrap {service_name}", "`pnpm install` ok.")
+                        add_check("PASS", "app", f"Bootstrap {service_name}", f"`{package_manager} ci` ok.")
 
         for repo in implementation_repos():
             runner = str(repo_config(repo).get("test_runner", "")).strip()
@@ -874,7 +893,7 @@ def command_ci_integration(
                 autoload = repo_path / "vendor" / "autoload.php"
                 if composer_json.exists() and not autoload.exists():
                     preflight_issues.append("falta `vendor/autoload.php`")
-            elif runner == "pnpm":
+            elif runner in {"pnpm", "npm"}:
                 package_json = repo_path / "package.json"
                 has_lock = any((repo_path / name).exists() for name in ("pnpm-lock.yaml", "package-lock.json", "yarn.lock"))
                 node_modules = repo_path / "node_modules"

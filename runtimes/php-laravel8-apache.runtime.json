@@ -1,0 +1,49 @@
+{
+  "runtime_kind": "project",
+  "target_roots": [
+    ".github",
+    "AGENTS.md",
+    "Makefile",
+    "docker-compose.yaml",
+    "php.Dockerfile",
+    ".env.example",
+    "config",
+    "src"
+  ],
+  "default_targets": [
+    "../../{path}/src/**"
+  ],
+  "test_runner": "php",
+  "test_hint": "../../{path}/src/tests",
+  "test_required_roots": [
+    "src"
+  ],
+  "placeholder_dirs": [],
+  "placeholder_files": {},
+  "agent_skill_refs": [
+    "workspace/php-core",
+    "workspace/laravel-8",
+    "workspace/softos-code-graph-playbook",
+    "workspace/softos-agent-memory-playbook",
+    "workspace/softos-agent-playbook"
+  ],
+  "ci": {
+    "install": [
+      "composer",
+      "--working-dir=src",
+      "install",
+      "--no-interaction",
+      "--prefer-dist"
+    ],
+    "test": [
+      "php",
+      "-d",
+      "memory_limit=512M",
+      "src/vendor/bin/phpunit",
+      "-c",
+      "src/phpunit.xml"
+    ]
+  },
+  "compose": null,
+  "notes": "Runtime de PLG: PHP 8.2, Apache, Composer y aplicacion Laravel 8 bajo src/. El compose es propiedad del repo."
+}

@@ -123,7 +123,7 @@ Una spec derivada de schema-sync debe exigir como mínimo:
 
 ```yaml
 - name: provider-and-workflow-templates
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../scripts/providers/release/github_actions.sh
     - ../../templates/github-workflows/promotion-pr.yml
@@ -133,7 +133,7 @@ Una spec derivada de schema-sync debe exigir como mínimo:
   hot_area: release/pr-promotion
   depends_on: []
 - name: promotion-pr-ci-and-runbook
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../templates/github-workflows/promotion-pr-ci.yml
     - ../../docs/softos-pr-promotion-runbook.md
@@ -141,7 +141,7 @@ Una spec derivada de schema-sync debe exigir como mínimo:
   depends_on:
     - provider-and-workflow-templates
 - name: docs-and-schema-sync-contract
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../specs/features/softos-pr-promotion-deploy.spec.md
   hot_area: docs/pr-promotion

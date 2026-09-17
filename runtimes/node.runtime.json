@@ -44,7 +44,10 @@
     "workspace/softos-staging-promote-preflight",
     "workspace/softos-worktree-hygiene",
     "workspace/spec-driven-workspace",
-    "workspace/node-core"
+    "workspace/node-core",
+    "workspace/softos-code-graph-playbook",
+    "workspace/softos-agent-memory-playbook",
+    "workspace/softos-agent-playbook"
   ],
   "ci": {
     "install": ["pnpm", "install"],

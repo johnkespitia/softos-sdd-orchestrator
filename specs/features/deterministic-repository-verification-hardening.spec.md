@@ -46,7 +46,7 @@ A preserved `host-repo-exec-routing-alignment` implementation now demonstrates t
 - implementation ownership passes;
 - changed-file scope passes;
 - focused Python tests pass (`22 passed`, plus `7 subtests`);
-- canonical `flow slice verify` rejects both linked Python test files because `sdd-workspace-boilerplate` does not declare `test_runner`;
+- canonical `flow slice verify` rejects both linked Python test files because `plg-platform-harness` does not declare `test_runner`;
 - no automatic test command is detected.
 
 That result is a platform verification failure, not an implementation failure. The preserved worktree and its blocked outcome are evidence only and are outside this feature's write scope.
@@ -143,7 +143,7 @@ All listed implementation and test targets currently exist. The historical nonex
 
 ```yaml
 - name: root-python-test-contract
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../workspace.config.json
     - ../../flow
@@ -167,7 +167,7 @@ All listed implementation and test targets currently exist. The historical nonex
     - independent cursor review leaves Git state unchanged
 
 - name: git-scope-ignore-hygiene
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../flowctl/gittools.py
     - ../../flowctl/test_release_scope_drift.py
@@ -188,7 +188,7 @@ All listed implementation and test targets currently exist. The historical nonex
     - independent codex review leaves Git state unchanged
 
 - name: slice-verification-regression
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../flowctl/test_slice_verify.py
   hot_area: combined canonical slice-verification regression coverage
@@ -275,7 +275,7 @@ All listed implementation and test targets currently exist. The historical nonex
 
 - name: repo-ci
   level: custom
-  command: python3 ./flow workspace exec -- python3 ./flow ci repo sdd-workspace-boilerplate --spec deterministic-repository-verification-hardening --json
+  command: python3 ./flow workspace exec -- python3 ./flow ci repo plg-platform-harness --spec deterministic-repository-verification-hardening --json
   blocking_on: [ci]
   environments: [local]
   notes: runs applicable root repository CI without widening slice ownership

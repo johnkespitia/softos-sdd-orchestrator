@@ -101,7 +101,7 @@ El resultado es drift operacional entre:
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/**`, `../../docs/**/*.md`, `../../specs/features/workflow-closeout-status-propagation.spec.md` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/**`, `../../docs/**/*.md`, `../../specs/features/workflow-closeout-status-propagation.spec.md` |
 
 ## Resultado esperado
 

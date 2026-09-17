@@ -327,7 +327,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
 
 ```yaml
 - name: opencode-resource-pools
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../workspace.config.json
     - ../../opencode.json
@@ -355,7 +355,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
     - existing executor/process tests remain green
 
 - name: patch-unit-execution-policy
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../policies/**
     - ../../flowctl/*policy*.py
@@ -378,7 +378,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
     - zero-diff scope-violation invalid-contract and reviewer-independence tests
 
 - name: portable-coding-playbook
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../.agents/skills/**
     - ../../workspace.skills.json
@@ -399,7 +399,7 @@ If the selected local resource is unavailable before any local Patch Unit can ru
     - supervisor and reviewer identities are explicitly separated
 
 - name: full-run-validation
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../docs/**
   hot_area: real git-scope-ignore-hygiene execution protocol and evidence package
@@ -508,7 +508,7 @@ The two prospective test targets owned by `opencode-resource-pools` and the one 
 
 - name: root-repo-ci
   level: custom
-  command: python3 ./flow workspace exec -- python3 ./flow ci repo sdd-workspace-boilerplate --spec coding-execution-runtime-v1 --json
+  command: python3 ./flow workspace exec -- python3 ./flow ci repo plg-platform-harness --spec coding-execution-runtime-v1 --json
   blocking_on: [ci]
   environments: [local]
   notes: runs applicable root repository CI after all slices integrate

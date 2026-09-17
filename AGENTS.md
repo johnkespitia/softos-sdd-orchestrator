@@ -6,8 +6,9 @@ This is a multi-project workspace. Use the nearest `AGENTS.md` plus parent `AGEN
 
 ## Project routing
 
-- Use `backend/AGENTS.md` for backend specs, backend architecture, Tessl workflow, or files under `backend/**`.
-- Use `frontend/AGENTS.md` for frontend specs, design-system work, routing migration, or files under `frontend/**`.
+- Use `plg-platform-backend/AGENTS.md` for backend specs, Laravel architecture, runtime commands, or files under `plg-platform-backend/**`.
+- Use `dashboard-frontend/AGENTS.md` for the legacy CRA dashboard under `dashboard-frontend/**`.
+- Use `hub-frontend/AGENTS.md` for the Vite + React + TypeScript hub under `hub-frontend/**`.
 - Use root `specs/**` as the canonical source of truth for system-level features, cross-repo behavior, and orchestration rules.
 
 ## Skills por runtime
@@ -61,6 +62,13 @@ Usa el skill `workspace/skills-discover` cuando necesites buscar skills en tessl
 - `implementation agents`: execute slices with explicit write ownership.
 - `verification agent`: validates evidence and regression risk without expanding functional scope.
 
+Runtime role is assigned by `flow`, not by the model, vendor, or prompt. A
+standalone host-native agent run starts as `orchestrator`; nested runs default to
+`worker`, inherit the current parent run id, and require a new handoff. A child
+cannot explicitly elevate itself to `orchestrator`; `reviewer` remains an
+explicit role plus parent run id and handoff.
+Child runs do not inherit orchestration authority from this file.
+
 ### 2) Ownership rules
 
 - Each agent must receive explicit write ownership by file paths/patterns before execution starts.
@@ -90,6 +98,16 @@ Required gates:
 - `G6` closeout evidence/state consistency
 
 Rule: if a gate is not satisfied, do not advance to the next one.
+
+### 5) BMAD compatibility
+
+BMAD remains the workflow/intake/spec/planning layer. SoftOS runtime roles sit
+under that layer:
+
+`BMAD workflow -> approved spec/plan -> orchestrator -> worker/reviewer runs`.
+
+Workers and reviewers must not run BMAD/workflow orchestration, create child
+agents, self-approve, commit, push, merge, release, or publish.
 
 ## SoftOS operating playbooks
 

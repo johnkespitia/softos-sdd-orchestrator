@@ -1,7 +1,7 @@
 ---
 schema_version: 3
 name: "SoftOS external tooling update guide"
-description: "Documentar y preparar el entorno para actualizar BMAD, Tessl, Engram y skills externos con defaults latest y opcion de pin reproducible."
+description: "Documentar y preparar el entorno para actualizar BMAD, Tessl, Engram y skills externos con defaults gobernados y opcion de pin reproducible."
 status: approved
 owner: platform
 single_slice_reason: "documentation plus devcontainer version args are one bounded toolchain governance surface"
@@ -46,7 +46,8 @@ Antes de esta spec, el Dockerfile ya tomaba versions actuales para npm packages 
 
 ## Governing Decision
 
-- El modo default de desarrollo debe seguir latest en rebuild.
+- El modo default de desarrollo debe seguir `latest` en rebuild, salvo que una spec posterior
+  de compatibilidad fije una version estable para una herramienta concreta.
 - El mismo Dockerfile debe permitir pinning por build args.
 - El manual debe separar binarios, assets versionados y estado operativo.
 - Engram memory sigue siendo consultiva y no puede ser fuente de verdad.
@@ -56,7 +57,7 @@ Antes de esta spec, el Dockerfile ya tomaba versions actuales para npm packages 
 
 | Superficie | Cambio obligatorio | Prohibido |
 |---|---|---|
-| `.devcontainer/Dockerfile` | Agregar ARGs de version con default `latest` para pnpm, Tessl, BMAD y Engram. | Romper instalacion default del devcontainer. |
+| `.devcontainer/Dockerfile` | Agregar ARGs de version con defaults explicitos para pnpm, Tessl, BMAD y Engram. | Romper instalacion default del devcontainer. |
 | `flowctl/stack.py` | Resolver Compose dinamicamente: preferir `docker compose` y caer a `docker-compose`. | Hardcodear un runtime Compose unico. |
 | `flow` | Permitir stack context si existe `docker-compose` aunque falte plugin `docker compose`. | Cambiar contratos de comandos `stack`. |
 | `flowctl/test_stack_compose_files.py` | Cubrir render de comandos y fallback standalone. | Depender del Docker real del host en unit tests. |
@@ -71,7 +72,7 @@ Antes de esta spec, el Dockerfile ya tomaba versions actuales para npm packages 
    - `PNPM_VERSION=latest`
    - `TESSL_CLI_VERSION=latest`
    - `BMAD_METHOD_VERSION=latest`
-   - `ENGRAM_VERSION=latest`
+   - `ENGRAM_VERSION=latest` o el pin estable gobernado por una spec posterior.
 2. Instalar npm packages usando `package@${VERSION}`.
 3. Resolver Engram desde `/releases/latest` cuando `ENGRAM_VERSION=latest`.
 4. Resolver Engram desde `/releases/tags/<tag>` cuando `ENGRAM_VERSION` tenga un tag explicito.
@@ -168,7 +169,8 @@ Antes de esta spec, el Dockerfile ya tomaba versions actuales para npm packages 
 
 ## Acceptance Criteria
 
-- El Dockerfile permite latest por defecto para pnpm, Tessl, BMAD y Engram.
+- El Dockerfile permite `latest` para pnpm, Tessl y BMAD, y permite que una spec posterior
+  gobierne un pin estable de Engram sin perder soporte para `latest`.
 - El Dockerfile permite pinning por build args sin editar el archivo.
 - El manual explica update latest, pinning, validacion y separacion entre binarios/assets/estado.
 - El manual incluye comandos para BMAD, Tessl, Engram y skills.

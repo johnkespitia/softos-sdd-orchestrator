@@ -2,7 +2,7 @@
 schema_version: 3
 name: "Runtime user ownership"
 description: "Corregir la propiedad de archivos en bind mounts del workspace garantizando que el servicio workspace y las rutas de ejecución canónicas de SoftOS operen como usuario de desarrollo (FLOW_WORKSPACE_USER, default vscode) mientras root queda reservado solo para preparación de arranque del contenedor."
-status: draft
+status: approved
 owner: platform
 single_slice_reason: "Bugfix transversal del contrato de ownership entre compose, entrypoint y flowctl con validación ya demostrada en este worktree."
 multi_domain: false
@@ -12,8 +12,7 @@ depends_on:
   - specs/features/spec-driven-delivery-bootstrap.spec.md
 required_runtimes:
   - python
-required_services:
-  - workspace
+required_services: []
 stack_projects: []
 stack_services: []
 stack_capabilities: []
@@ -48,6 +47,10 @@ como usuario de desarrollo. Los servicios compose distintos de `workspace` conse
 de usuario existente.
 
 ## Contexto
+
+El servicio `workspace` es un servicio Compose del devcontainer, no un runtime
+de servicio registrado en `workspace.runtimes.json`. La validación debe ejecutar
+los comandos en ese servicio mediante las rutas canónicas de SoftOS.
 
 - SoftOS monta el workspace y worktrees del host dentro de contenedores Docker.
 - El bind mount hace que UID/GID dentro del contenedor se reflejen directamente en el filesystem
@@ -133,7 +136,7 @@ confundía la frontera entre ejecución administrativa y desarrollo.
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../.devcontainer/docker-compose.yml`, `../../.devcontainer/workspace-entrypoint.sh`, `../../flow`, `../../flowctl/stack_ops.py`, `../../flowctl/tooling.py`, `../../flowctl/test_workspace_exec_user.py`, `../../specs/features/runtime-user-ownership.spec.md` |
+| `plg-platform-harness` | `../../.devcontainer/docker-compose.yml`, `../../.devcontainer/workspace-entrypoint.sh`, `../../flow`, `../../flowctl/stack_ops.py`, `../../flowctl/tooling.py`, `../../flowctl/test_workspace_exec_user.py`, `../../specs/features/runtime-user-ownership.spec.md` |
 
 ## Resultado esperado
 
@@ -265,7 +268,7 @@ porque PID 1 del servicio ya es el usuario de desarrollo.
 
 ## Routing de implementacion
 
-- El repo se deduce desde `targets`: `sdd-workspace-boilerplate`.
+- El repo se deduce desde `targets`: `plg-platform-harness`.
 - Una sola slice material cubre compose, entrypoint, `flow`, `flowctl` y tests.
 - El plan operativo vive en `.flow/plans/**` si se materializa; esta spec documenta trabajo ya
   validado en el worktree activo.
@@ -275,7 +278,7 @@ porque PID 1 del servicio ya es el usuario de desarrollo.
 
 ```yaml
 - name: runtime-user-ownership-fix
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../.devcontainer/docker-compose.yml
     - ../../.devcontainer/workspace-entrypoint.sh

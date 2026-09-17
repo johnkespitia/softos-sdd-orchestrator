@@ -1,0 +1,892 @@
+{
+  "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+  "generated_at": "2026-09-11T02:07:30+00:00",
+  "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+  "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+  "ready_for_release": true,
+  "missing": [],
+  "spec_approval": {
+    "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+    "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+    "approved": true,
+    "approval": {
+      "approver": "john",
+      "approved_at": "2026-09-10T17:29:21+00:00",
+      "review_report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+      "review_spec_hash": "3bbde6b0e1fae035f67a29629f4d8bd48c3f38d8c5251c4a9237df3194235bb4",
+      "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+      "spec_mtime_ns": 1789061361875815429,
+      "frontmatter_status": "approved"
+    },
+    "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+    "current_spec_mtime_ns": 1789061361875815429,
+    "invalid_reasons": [],
+    "next_required_action": ""
+  },
+  "plan_approval": {
+    "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+    "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+    "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+    "approved": true,
+    "approval": {
+      "status": "approved",
+      "approver": "orchestrator",
+      "approved_at": "2026-09-11T02:07:29+00:00",
+      "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+      "plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+      "plan_json": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json"
+    },
+    "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+    "current_plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+    "invalid_reasons": [],
+    "next_required_action": ""
+  },
+  "policies": {
+    "plan": {
+      "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+      "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+      "stage": "plan",
+      "allowed": true,
+      "checks": [
+        {
+          "name": "spec_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "approved": true,
+            "approval": {
+              "approver": "john",
+              "approved_at": "2026-09-10T17:29:21+00:00",
+              "review_report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+              "review_spec_hash": "3bbde6b0e1fae035f67a29629f4d8bd48c3f38d8c5251c4a9237df3194235bb4",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "spec_mtime_ns": 1789061361875815429,
+              "frontmatter_status": "approved"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_spec_mtime_ns": 1789061361875815429,
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        },
+        {
+          "name": "plan_approval",
+          "required": false,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+            "approved": true,
+            "approval": {
+              "status": "approved",
+              "approver": "orchestrator",
+              "approved_at": "2026-09-11T02:07:29+00:00",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+              "plan_json": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        }
+      ],
+      "blocked_reasons": [],
+      "next_required_actions": []
+    },
+    "slice-start": {
+      "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+      "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+      "stage": "slice-start",
+      "allowed": true,
+      "checks": [
+        {
+          "name": "spec_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "approved": true,
+            "approval": {
+              "approver": "john",
+              "approved_at": "2026-09-10T17:29:21+00:00",
+              "review_report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+              "review_spec_hash": "3bbde6b0e1fae035f67a29629f4d8bd48c3f38d8c5251c4a9237df3194235bb4",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "spec_mtime_ns": 1789061361875815429,
+              "frontmatter_status": "approved"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_spec_mtime_ns": 1789061361875815429,
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        },
+        {
+          "name": "plan_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+            "approved": true,
+            "approval": {
+              "status": "approved",
+              "approver": "orchestrator",
+              "approved_at": "2026-09-11T02:07:29+00:00",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+              "plan_json": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        }
+      ],
+      "blocked_reasons": [],
+      "next_required_actions": []
+    },
+    "workflow-run": {
+      "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+      "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+      "stage": "workflow-run",
+      "allowed": true,
+      "checks": [
+        {
+          "name": "spec_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "approved": true,
+            "approval": {
+              "approver": "john",
+              "approved_at": "2026-09-10T17:29:21+00:00",
+              "review_report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+              "review_spec_hash": "3bbde6b0e1fae035f67a29629f4d8bd48c3f38d8c5251c4a9237df3194235bb4",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "spec_mtime_ns": 1789061361875815429,
+              "frontmatter_status": "approved"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_spec_mtime_ns": 1789061361875815429,
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        },
+        {
+          "name": "plan_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+            "approved": true,
+            "approval": {
+              "status": "approved",
+              "approver": "orchestrator",
+              "approved_at": "2026-09-11T02:07:29+00:00",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+              "plan_json": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        }
+      ],
+      "blocked_reasons": [],
+      "next_required_actions": []
+    },
+    "release": {
+      "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+      "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+      "stage": "release",
+      "allowed": true,
+      "checks": [
+        {
+          "name": "spec_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "approved": true,
+            "approval": {
+              "approver": "john",
+              "approved_at": "2026-09-10T17:29:21+00:00",
+              "review_report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+              "review_spec_hash": "3bbde6b0e1fae035f67a29629f4d8bd48c3f38d8c5251c4a9237df3194235bb4",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "spec_mtime_ns": 1789061361875815429,
+              "frontmatter_status": "approved"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_spec_mtime_ns": 1789061361875815429,
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        },
+        {
+          "name": "plan_approval",
+          "required": true,
+          "passed": true,
+          "blocking": false,
+          "invalid_reasons": [],
+          "next_required_action": "",
+          "status": {
+            "feature": "2026-09-10-backend-owned-temporal-projection-contract",
+            "spec_path": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+            "plan_path": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json",
+            "approved": true,
+            "approval": {
+              "status": "approved",
+              "approver": "orchestrator",
+              "approved_at": "2026-09-11T02:07:29+00:00",
+              "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+              "plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+              "plan_json": ".flow/plans/plg/2026-09-10-backend-owned-temporal-projection-contract.json"
+            },
+            "current_spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+            "current_plan_hash": "7c3e99de72d8701c3e6d7ec214d399ecf94fcc1f29beec40530f1af9c13ac12a",
+            "invalid_reasons": [],
+            "next_required_action": ""
+          }
+        }
+      ],
+      "blocked_reasons": [],
+      "next_required_actions": []
+    }
+  },
+  "state": {
+    "status": "plan-approved",
+    "last_review": {
+      "report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+      "ready_to_approve": true,
+      "reviewed_at": "2026-09-10T17:29:29+00:00",
+      "result": "ready_to_approve",
+      "spec_hash": "bd36882fc8bea6ddebdbd551f39a1463d45b03c0f5df19a5dfedc9f69c247872",
+      "spec_mtime_ns": 1789061361875815429
+    },
+    "last_verification_result": "passed",
+    "workflow_engine": null,
+    "slice_results": {
+      "backend-temporal-projection-core": {
+        "status": "passed",
+        "report": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-verification.md",
+        "repo": "plg-platform-backend",
+        "changed_files": [
+          "src/app/Helpers/TimezoneHelper.php",
+          "src/app/Models/ImpartedClass.php",
+          "src/app/Services/Scheduling/TemporalScheduleProjection.php",
+          "src/app/Support/DiagnosticClassSchedulePresenter.php",
+          "src/app/Support/ImpartedClassSchedulePresenter.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php",
+          "src/tests/Unit/Scheduling/TemporalScheduleProjectionTest.php"
+        ],
+        "owned_patterns": [
+          "src/app/Helpers/TimezoneHelper.php",
+          "src/app/Support/DiagnosticClassSchedulePresenter.php",
+          "src/app/Support/ImpartedClassSchedulePresenter.php",
+          "src/app/Services/Scheduling/**",
+          "src/app/Models/DiagnosticClass.php",
+          "src/app/Models/ImpartedClass.php",
+          "src/tests/Unit/**"
+        ],
+        "linked_test_patterns": [
+          "src/tests/Unit/Scheduling/DiagnosticClassScheduleNormalizerTest.php",
+          "src/tests/Feature/ProfessorActionsDiagnosticClassReadTest.php",
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php"
+        ],
+        "materialized_tests": [
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php",
+          "src/tests/Feature/ProfessorActionsDiagnosticClassReadTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php",
+          "src/tests/Unit/Scheduling/DiagnosticClassScheduleNormalizerTest.php"
+        ],
+        "verified_at": "2026-09-10T19:53:01+00:00"
+      },
+      "diagnostic-class-backend-contract": {
+        "status": "passed",
+        "report": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md",
+        "repo": "plg-platform-backend",
+        "changed_files": [
+          "src/app/Http/Controllers/DiagnosticClassController.php",
+          "src/app/Services/Hub/HubProfileService.php",
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php"
+        ],
+        "owned_patterns": [
+          "src/app/Http/Controllers/DiagnosticClassController.php",
+          "src/app/Http/Controllers/Actions/Professor/**",
+          "src/app/Services/Actions/**",
+          "src/app/Services/Hub/**",
+          "src/app/Support/DiagnosticClassSchedulePresenter.php",
+          "src/docs/openapi/**",
+          "src/resources/views/email/**",
+          "src/routes/api.php",
+          "src/tests/Feature/**"
+        ],
+        "linked_test_patterns": [
+          "src/tests/Unit/Scheduling/DiagnosticClassScheduleNormalizerTest.php",
+          "src/tests/Feature/ProfessorActionsDiagnosticClassReadTest.php",
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php"
+        ],
+        "materialized_tests": [
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php",
+          "src/tests/Feature/ProfessorActionsDiagnosticClassReadTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php",
+          "src/tests/Unit/Scheduling/DiagnosticClassScheduleNormalizerTest.php"
+        ],
+        "verified_at": "2026-09-10T20:10:08+00:00"
+      },
+      "temporal-contract-integration-review": {
+        "status": "passed",
+        "report": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-verification.md",
+        "repo": "plg-platform-harness",
+        "changed_files": [],
+        "owned_patterns": [
+          "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md"
+        ],
+        "linked_test_patterns": [],
+        "materialized_tests": [],
+        "verified_at": "2026-09-11T02:00:15+00:00"
+      },
+      "dashboard-render-backend-temporal-fields": {
+        "status": "passed",
+        "report": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-verification.md",
+        "repo": "dashboard-frontend",
+        "changed_files": [
+          "src/src/components/CreateDiagnosticClassModal.jsx",
+          "src/src/pages/DiagnosticClass/DiagnosticClassAssignment.test.jsx",
+          "src/src/pages/DiagnosticClass/Form.jsx",
+          "src/src/pages/DiagnosticClass/List.jsx",
+          "src/src/pages/DiagnosticClass/assignmentCopy.js",
+          "src/src/pages/ProfessorsDashboard/DiagnosticClass/Form.jsx",
+          "src/src/pages/ProfessorsDashboard/DiagnosticClass/List.jsx",
+          "src/src/pages/ProfessorsDashboard/DiagnosticClass/List.test.jsx",
+          "src/src/pages/ProfessorsDashboard/Invoice/Invoice.jsx",
+          "src/src/pages/ProfessorsDashboard/Invoice/PreviewClasses.jsx",
+          "src/src/pages/ProfessorsDashboard/Invoice/PreviewClasses.test.jsx",
+          "src/src/pages/StudentDashboard/ClassScreen/Form.jsx",
+          "src/src/pages/StudentDashboard/ClassScreen/List.jsx",
+          "src/src/pages/StudentDashboard/ClassScreen/List.test.jsx",
+          "src/src/pages/StudentDashboard/Events/List.jsx",
+          "src/src/pages/StudentDashboard/Plans/PlanCard.jsx",
+          "src/src/store/DiagnosticClassSlice.js",
+          "src/src/utils/dateUtils.js",
+          "src/src/utils/dateUtils.test.js",
+          "src/src/utils/timezoneUtils.js"
+        ],
+        "owned_patterns": [
+          "src/src/utils/dateUtils.js",
+          "src/src/utils/dateUtils.test.js",
+          "src/src/utils/timezoneUtils.js",
+          "src/src/pages/DiagnosticClass/**",
+          "src/src/pages/ProfessorsDashboard/DiagnosticClass/**",
+          "src/src/pages/ProfessorsDashboard/Invoice/**",
+          "src/src/pages/StudentDashboard/**",
+          "src/src/components/CreateDiagnosticClassModal.jsx",
+          "src/src/store/DiagnosticClassSlice.js"
+        ],
+        "linked_test_patterns": [
+          "src/src/utils/dateUtils.test.js"
+        ],
+        "materialized_tests": [
+          "src/src/utils/dateUtils.test.js"
+        ],
+        "verified_at": "2026-09-11T01:59:56+00:00"
+      },
+      "hub-render-backend-temporal-fields": {
+        "status": "passed",
+        "report": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-verification.md",
+        "repo": "hub-frontend",
+        "changed_files": [
+          "src/features/diagnostic-class-access/components/DiagnosticAccessForm.tsx",
+          "src/features/diagnostic-class-access/components/DiagnosticClassConnectModal.tsx",
+          "src/features/diagnostic-class-access/formatDiagnosticSession.test.ts",
+          "src/features/diagnostic-class-access/formatDiagnosticSession.ts",
+          "src/features/diagnostic-class-access/types.ts",
+          "src/features/professor-dashboard/types.ts",
+          "src/features/student-dashboard/components/events/CalendarEventDetailModal.tsx",
+          "src/features/student-dashboard/components/events/DiagnosticClassCalendarCard.tsx",
+          "src/features/student-dashboard/components/events/calendarItems.test.ts",
+          "src/features/student-dashboard/components/events/calendarItems.ts",
+          "src/features/student-dashboard/normalizeMyAccountStudent.test.ts",
+          "src/features/student-dashboard/normalizeMyAccountStudent.ts",
+          "src/features/student-dashboard/types.ts",
+          "src/shared/api/timezone.test.tsx",
+          "src/shared/api/timezone.ts"
+        ],
+        "owned_patterns": [
+          "src/features/diagnostic-class-access/**",
+          "src/features/professor-dashboard/**",
+          "src/features/student-dashboard/**",
+          "src/shared/api/timezone.ts",
+          "src/shared/api/timezone.test.tsx",
+          "src/shared/lib/format.ts",
+          "src/test/mocks/handlers.ts"
+        ],
+        "linked_test_patterns": [
+          "src/pages/DiagnosticClassAccessPage.test.tsx",
+          "src/features/student-dashboard/components/events/calendarItems.test.ts",
+          "src/features/student-dashboard/normalizeMyAccountStudent.test.ts"
+        ],
+        "materialized_tests": [
+          "src/features/student-dashboard/components/events/calendarItems.test.ts",
+          "src/features/student-dashboard/normalizeMyAccountStudent.test.ts",
+          "src/pages/DiagnosticClassAccessPage.test.tsx"
+        ],
+        "verified_at": "2026-09-11T02:05:50+00:00"
+      },
+      "backend-broader-schedule-surfaces": {
+        "status": "passed",
+        "report": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-verification.md",
+        "repo": "plg-platform-backend",
+        "changed_files": [
+          "src/app/Helpers/TimezoneHelper.php",
+          "src/app/Http/Controllers/Api/V2/Hub/HubEventsController.php",
+          "src/app/Http/Controllers/EventController.php",
+          "src/app/Http/Controllers/ImpartedClassController.php",
+          "src/app/Http/Controllers/ProfessorInvoiceController.php",
+          "src/app/Models/Event.php",
+          "src/app/Models/ImpartedClass.php",
+          "src/app/Services/Hub/HubEventPresentationService.php",
+          "src/app/Services/Scheduling/TemporalScheduleProjection.php",
+          "src/app/Support/DiagnosticClassSchedulePresenter.php",
+          "src/app/Support/ImpartedClassSchedulePresenter.php",
+          "src/tests/Feature/EventControllerTemporalProjectionTest.php",
+          "src/tests/Feature/HubV2EventsBenefitsDiagnosticTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php",
+          "src/tests/Unit/Scheduling/TemporalScheduleProjectionTest.php"
+        ],
+        "owned_patterns": [
+          "src/app/Helpers/TimezoneHelper.php",
+          "src/app/Http/Controllers/ImpartedClassController.php",
+          "src/app/Http/Controllers/EventController.php",
+          "src/app/Http/Controllers/ProfessorInvoiceController.php",
+          "src/app/Http/Controllers/Api/V2/Hub/**",
+          "src/app/Services/Hub/**",
+          "src/app/Support/ImpartedClassSchedulePresenter.php",
+          "src/app/Support/DiagnosticClassSchedulePresenter.php",
+          "src/app/Services/Scheduling/**",
+          "src/app/Models/Event.php",
+          "src/app/Models/ImpartedClass.php",
+          "src/tests/Feature/**",
+          "src/tests/Unit/**"
+        ],
+        "linked_test_patterns": [
+          "src/tests/Unit/Scheduling/DiagnosticClassScheduleNormalizerTest.php",
+          "src/tests/Feature/ProfessorActionsDiagnosticClassReadTest.php",
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php"
+        ],
+        "materialized_tests": [
+          "src/tests/Feature/DiagnosticClassSchedulingAuthorizationTest.php",
+          "src/tests/Feature/ProfessorActionsDiagnosticClassReadTest.php",
+          "src/tests/Feature/ProfessorInvoiceTimezoneTest.php",
+          "src/tests/Unit/ImpartedClassDateTimeTest.php",
+          "src/tests/Unit/Scheduling/DiagnosticClassScheduleNormalizerTest.php"
+        ],
+        "verified_at": "2026-09-11T01:58:09+00:00"
+      }
+    }
+  },
+  "reports": [
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-handoff.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 7383,
+      "mtime_ns": 1789091280334670420
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2430,
+      "mtime_ns": 1789091889451631718
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-handoff.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2808,
+      "mtime_ns": 1789075362367145810
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2380,
+      "mtime_ns": 1789091996125214348
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 1744,
+      "mtime_ns": 1789071008281338144
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-execution-checkpoint.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 1690,
+      "mtime_ns": 1789077173294329069
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-g5-integration-review.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 1664,
+      "mtime_ns": 1789075196669568347
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-g6-closeout.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2585,
+      "mtime_ns": 1789092164858938194
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-handoff.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2695,
+      "mtime_ns": 1789075388973321837
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 3876,
+      "mtime_ns": 1789092350254418258
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 658,
+      "mtime_ns": 1789061369742302460
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-handoff.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2283,
+      "mtime_ns": 1789074502714962805
+    },
+    {
+      "path": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 1302,
+      "mtime_ns": 1789092015887018201
+    },
+    {
+      "path": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-handoff.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 4418,
+      "mtime_ns": 1789066515003969354
+    },
+    {
+      "path": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 1931,
+      "mtime_ns": 1789069981351965128
+    },
+    {
+      "path": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-handoff.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 4937,
+      "mtime_ns": 1789067279726346441
+    },
+    {
+      "path": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 2662,
+      "mtime_ns": 1789069949373017360
+    },
+    {
+      "path": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+      "kind": "root",
+      "format": "md",
+      "size_bytes": 658,
+      "mtime_ns": 1789061369742302460
+    },
+    {
+      "path": ".flow/reports/ci/plg/spec-2026-09-10-backend-owned-temporal-projection-contract.json",
+      "kind": "ci",
+      "format": "json",
+      "size_bytes": 535,
+      "mtime_ns": 1789091582072446411,
+      "scope": "2026-09-10-backend-owned-temporal-projection-contract",
+      "generated_at": "2026-09-11T01:53:02+00:00",
+      "item_status": "passed"
+    },
+    {
+      "path": ".flow/reports/ci/plg/spec-2026-09-10-backend-owned-temporal-projection-contract.md",
+      "kind": "ci",
+      "format": "md",
+      "size_bytes": 275,
+      "mtime_ns": 1789091582072584695
+    },
+    {
+      "path": ".flow/reports/ci/plg/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json",
+      "kind": "ci",
+      "format": "json",
+      "size_bytes": 562,
+      "mtime_ns": 1789075150761344325,
+      "scope": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "generated_at": "2026-09-10T21:19:10+00:00",
+      "item_status": "passed"
+    },
+    {
+      "path": ".flow/reports/ci/plg/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.md",
+      "kind": "ci",
+      "format": "md",
+      "size_bytes": 302,
+      "mtime_ns": 1789075150762134644
+    },
+    {
+      "path": ".flow/reports/ci/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json",
+      "kind": "ci",
+      "format": "json",
+      "size_bytes": 562,
+      "mtime_ns": 1789061369775998753,
+      "scope": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+      "generated_at": "2026-09-10T17:29:29+00:00",
+      "item_status": "passed"
+    },
+    {
+      "path": ".flow/reports/ci/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.md",
+      "kind": "ci",
+      "format": "md",
+      "size_bytes": 302,
+      "mtime_ns": 1789061369776105657
+    },
+    {
+      "path": ".flow/reports/workflows/2026-09-10-backend-owned-temporal-projection-contract-next-step.json",
+      "kind": "workflows",
+      "format": "json",
+      "size_bytes": 5878,
+      "mtime_ns": 1789091510848080092,
+      "generated_at": "2026-09-11T01:51:50+00:00"
+    },
+    {
+      "path": ".flow/reports/workflows/2026-09-10-backend-owned-temporal-projection-contract-next-step.md",
+      "kind": "workflows",
+      "format": "md",
+      "size_bytes": 3000,
+      "mtime_ns": 1789091510848207475
+    }
+  ],
+  "ci_spec": {
+    "passed": true,
+    "reports": [
+      {
+        "path": ".flow/reports/ci/plg/spec-2026-09-10-backend-owned-temporal-projection-contract.json",
+        "kind": "ci",
+        "format": "json",
+        "size_bytes": 535,
+        "mtime_ns": 1789091582072446411,
+        "scope": "2026-09-10-backend-owned-temporal-projection-contract",
+        "generated_at": "2026-09-11T01:53:02+00:00",
+        "item_status": "passed"
+      },
+      {
+        "path": ".flow/reports/ci/plg/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json",
+        "kind": "ci",
+        "format": "json",
+        "size_bytes": 562,
+        "mtime_ns": 1789075150761344325,
+        "scope": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+        "generated_at": "2026-09-10T21:19:10+00:00",
+        "item_status": "passed"
+      },
+      {
+        "path": ".flow/reports/ci/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json",
+        "kind": "ci",
+        "format": "json",
+        "size_bytes": 562,
+        "mtime_ns": 1789061369775998753,
+        "scope": "specs/features/plg/2026-09-10-backend-owned-temporal-projection-contract.spec.md",
+        "generated_at": "2026-09-10T17:29:29+00:00",
+        "item_status": "passed"
+      }
+    ]
+  },
+  "workflow": {
+    "statuses": [],
+    "reports": [
+      {
+        "path": ".flow/reports/workflows/2026-09-10-backend-owned-temporal-projection-contract-next-step.json",
+        "kind": "workflows",
+        "format": "json",
+        "size_bytes": 5878,
+        "mtime_ns": 1789091510848080092,
+        "generated_at": "2026-09-11T01:51:50+00:00"
+      }
+    ]
+  },
+  "bundle": {
+    "json_report": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract-evidence-bundle.json",
+    "markdown_report": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract-evidence-bundle.md",
+    "files_root": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract",
+    "files": [
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-handoff.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-handoff.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-backend-broader-schedule-surfaces-verification.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-handoff.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-handoff.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-dashboard-render-backend-temporal-fields-verification.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-execution-checkpoint.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-execution-checkpoint.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-g5-integration-review.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-g5-integration-review.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-g6-closeout.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-g6-closeout.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-handoff.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-handoff.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-hub-render-backend-temporal-fields-verification.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-handoff.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-handoff.md"
+      },
+      {
+        "source": ".flow/reports/plg/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-temporal-contract-integration-review-verification.md"
+      },
+      {
+        "source": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-handoff.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-handoff.md"
+      },
+      {
+        "source": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-backend-temporal-projection-core-verification.md"
+      },
+      {
+        "source": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-handoff.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-handoff.md"
+      },
+      {
+        "source": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-diagnostic-class-backend-contract-verification.md"
+      },
+      {
+        "source": ".flow/reports/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-spec-review.md"
+      },
+      {
+        "source": ".flow/reports/ci/plg/spec-2026-09-10-backend-owned-temporal-projection-contract.json",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/spec-2026-09-10-backend-owned-temporal-projection-contract.json"
+      },
+      {
+        "source": ".flow/reports/ci/plg/spec-2026-09-10-backend-owned-temporal-projection-contract.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/spec-2026-09-10-backend-owned-temporal-projection-contract.md"
+      },
+      {
+        "source": ".flow/reports/ci/plg/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json"
+      },
+      {
+        "source": ".flow/reports/ci/plg/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.md"
+      },
+      {
+        "source": ".flow/reports/ci/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.json"
+      },
+      {
+        "source": ".flow/reports/ci/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/spec-specs-features-plg-2026-09-10-backend-owned-temporal-projection-contract-spec-md.md"
+      },
+      {
+        "source": ".flow/reports/workflows/2026-09-10-backend-owned-temporal-projection-contract-next-step.json",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-next-step.json"
+      },
+      {
+        "source": ".flow/reports/workflows/2026-09-10-backend-owned-temporal-projection-contract-next-step.md",
+        "bundle_path": ".flow/evidence/plg/2026-09-10-backend-owned-temporal-projection-contract/2026-09-10-backend-owned-temporal-projection-contract-next-step.md"
+      }
+    ]
+  }
+}

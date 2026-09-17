@@ -139,7 +139,7 @@ Cuando una slice preserve contrato o solo endurezca enforcement, la spec debe de
 {
   "name": "Release Manifest Envelope",
   "type": "json-schema",
-  "repo": "sdd-workspace-boilerplate",
+  "repo": "plg-platform-harness",
   "match": [
     "flow"
   ],
@@ -163,7 +163,7 @@ Cuando una slice preserve contrato o solo endurezca enforcement, la spec debe de
 {
   "name": "Release Promote Deploy Routing",
   "type": "json-schema",
-  "repo": "sdd-workspace-boilerplate",
+  "repo": "plg-platform-harness",
   "match": [
     "flowctl/release.py",
     "flowctl/parser.py",

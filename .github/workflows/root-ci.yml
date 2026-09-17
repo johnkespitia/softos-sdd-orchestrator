@@ -9,6 +9,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+permissions:
+  contents: read
+
 jobs:
   spec-governance:
     runs-on: ubuntu-latest
@@ -384,6 +387,9 @@ jobs:
 
   repo-ci-delegated:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     needs:
       - spec-governance
       - discover-repo-ci-matrix
@@ -400,6 +406,10 @@ jobs:
           fetch-depth: 0
 
       - name: Validate delegated workflow config
+        env:
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          HAS_GH_PAT: ${{ secrets.GH_PAT != '' && 'true' || 'false' }}
+          TARGET_REPOSITORY: ${{ matrix.workflow_repository || github.repository }}
         shell: bash
         run: |
           set -euo pipefail
@@ -411,13 +421,25 @@ jobs:
             echo "Repo '${{ matrix.repo }}' must declare ci.trigger_mode=workflow_dispatch_only when delegated from root-ci."
             exit 1
           fi
+          if [ -z "${{ matrix.workflow_ref }}" ]; then
+            echo "Repo '${{ matrix.repo }}' has no delegated workflow branch/tag."
+            exit 1
+          fi
+          if [ -z "${{ matrix.source_sha }}" ]; then
+            echo "Repo '${{ matrix.repo }}' has no delegated source SHA."
+            exit 1
+          fi
+          if [ "$TARGET_REPOSITORY" != "$CURRENT_REPOSITORY" ] && [ "$HAS_GH_PAT" != "true" ]; then
+            echo "Repo '${{ matrix.repo }}' dispatches cross-repo and requires the GH_PAT secret with Actions write access."
+            exit 1
+          fi
 
       - name: Dispatch project workflow
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
-          TARGET_REF: ${{ github.head_ref || github.ref_name }}
+          WORKFLOW_REF: ${{ matrix.workflow_ref }}
           TARGET_REPOSITORY: ${{ matrix.workflow_repository || github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_SHA: ${{ matrix.source_sha }}
           WORKFLOW_INPUTS_JSON: ${{ toJson(matrix.inputs) }}
         shell: bash
         run: |
@@ -426,8 +448,8 @@ jobs:
           ./scripts/ci/run_project_workflow.sh \
             "${{ matrix.workflow }}" \
             "${TARGET_REPOSITORY}" \
-            "${TARGET_REF}" \
-            "${HEAD_SHA}" \
+            "${WORKFLOW_REF}" \
+            "${SOURCE_SHA}" \
             "${WORKFLOW_INPUTS_JSON}"
 
   integration-smoke:

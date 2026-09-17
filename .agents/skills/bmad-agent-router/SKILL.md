@@ -111,6 +111,23 @@ When the user explicitly requests multi-agent execution:
 5. If ownership overlap appears, re-slice before continuing.
 6. Do not close multi-agent execution without handoff artifacts for every slice.
 
+### 8) Runtime role integration
+
+BMAD remains responsible for intake, spec authoring, planning, workflow choice,
+and product lifecycle state. SoftOS runtime roles are a subordinate execution
+layer:
+
+- the first host-native harness run is `role=orchestrator`;
+- the orchestrator may delegate only through `flow agent run`; nested runs
+  default to `role=worker`, while `role=reviewer` is explicit;
+- worker and reviewer runs require `--parent-run-id` and `--handoff`;
+- an inherited child cannot request `role=orchestrator`;
+- workers cannot run BMAD/workflow orchestration or create child runs;
+- reviewers are independent and read-only by contract;
+- executor selection may change with availability, but role semantics do not.
+
+The role is assigned by `flow`, not by the model, vendor, or free-form prompt.
+
 ## Rules
 
 - Prefer `flow workflow ...` as the primary BMAD entrypoint.

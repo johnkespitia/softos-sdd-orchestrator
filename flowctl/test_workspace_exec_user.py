@@ -211,7 +211,7 @@ def test_wrap_repo_command_for_service_uses_workspace_user(monkeypatch: pytest.M
         flow_module.compose_base_command = lambda: ["compose"]
         flow_module.repo_container_workdir = lambda path: "/workspace"
         wrapped = flow_module.wrap_repo_command_for_service(
-            "sdd-workspace-boilerplate",
+            flow_module.ROOT_REPO,
             Path("/tmp/root"),
             ["pytest"],
         )

@@ -76,7 +76,7 @@ Permitir que una spec declare pruebas transversales ejecutables, por nivel y por
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/**`, `../../templates/root-feature.spec.md`, `../../docs/**`, `../../.agents/skills/softos-spec-definition-playbook/**` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/**`, `../../templates/root-feature.spec.md`, `../../docs/**`, `../../.agents/skills/softos-spec-definition-playbook/**` |
 
 ## Resultado esperado
 

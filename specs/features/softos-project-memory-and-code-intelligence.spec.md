@@ -11,6 +11,7 @@ depends_on:
   - specs/000-foundation/spec-as-source-operating-model.spec.md
   - specs/000-foundation/spec-driven-delivery-and-infrastructure.spec.md
   - specs/000-foundation/repo-routing-and-worktree-orchestration.spec.md
+  - specs/features/softos-external-tooling-update-guide.spec.md
   - specs/features/softos-agent-memory-with-engram.spec.md
   - specs/features/softos-engram-devcontainer-install-and-smoke.spec.md
   - specs/features/softos-engram-client-mcp-activation.spec.md
@@ -37,6 +38,7 @@ targets:
   - ../../docs/softos-agent-dev-handbook.md
   - ../../flow
   - ../../flowctl/code_graph_ops.py
+  - ../../flowctl/doctor.py
   - ../../flowctl/memory_ops.py
   - ../../flowctl/parser.py
   - ../../flowctl/test_agent_memory_capability.py
@@ -48,6 +50,7 @@ targets:
   - ../../README.md
   - ../../scripts/bootstrap_workspace.py
   - ../../scripts/install_codex_graphify_mcp.sh
+  - ../../specs/features/softos-external-tooling-update-guide.spec.md
   - ../../specs/features/softos-project-memory-and-code-intelligence.spec.md
   - ../../workspace.capabilities.json
   - ../../workspace.config.json
@@ -70,6 +73,10 @@ Engram ya se instala en el devcontainer y usa `.flow/memory/engram`, pero la ima
 `latest` sin checksum y la documentacion conserva referencias a v1.11.0. La imagen materializada
 contiene v1.20.0. El entrypoint baja a UID/GID de `vscode` pero conserva `HOME=/root`, lo que rompe
 el contrato de tooling no-root.
+
+Esta feature reemplaza de forma explicita el default `latest` de Engram definido por
+`softos-external-tooling-update-guide`: Engram queda fijado a v1.20.0 por compatibilidad y
+verificacion de checksum; las demas herramientas conservan su politica anterior.
 
 Graphify no existe en SoftOS. La distribucion seleccionada es `Graphify-Labs/graphify`, paquete
 PyPI `graphifyy`, v0.9.56. Soporta AST local, cache/manifest incremental y MCP stdio cuyas
@@ -190,6 +197,7 @@ para decidir el trabajo incremental real.
     - ../../docs/softos-agent-dev-handbook.md
     - ../../flow
     - ../../flowctl/code_graph_ops.py
+    - ../../flowctl/doctor.py
     - ../../flowctl/memory_ops.py
     - ../../flowctl/parser.py
     - ../../flowctl/test_agent_memory_capability.py
@@ -201,6 +209,8 @@ para decidir el trabajo incremental real.
     - ../../README.md
     - ../../scripts/bootstrap_workspace.py
     - ../../scripts/install_codex_graphify_mcp.sh
+    - ../../specs/features/softos-external-tooling-update-guide.spec.md
+    - ../../specs/features/softos-project-memory-and-code-intelligence.spec.md
     - ../../workspace.capabilities.json
     - ../../workspace.config.json
   hot_area: workspace project context primitives
@@ -248,7 +258,7 @@ para decidir el trabajo incremental real.
 
 - name: project-context-live
   level: smoke
-  command: scripts/workspace_exec.sh python3 ./flow code-graph refresh sdd-workspace-boilerplate --json
+  command: scripts/workspace_exec.sh python3 ./flow code-graph refresh plg-platform-harness --json
   blocking_on:
     - ci
   environments:

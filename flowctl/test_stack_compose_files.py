@@ -38,7 +38,7 @@ class StackComposeFilesTests(unittest.TestCase):
             files = stack.workspace_compose_files(root_compose, workspace_config)
             self.assertEqual(files, [root_compose.resolve(), external_compose.resolve()])
 
-    def test_compose_base_command_renders_all_files(self) -> None:
+    def test_compose_base_command_uses_native_include_for_external_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             primary = root / ".devcontainer" / "docker-compose.yml"
@@ -49,6 +49,7 @@ class StackComposeFilesTests(unittest.TestCase):
             secondary.write_text("services: {}\n", encoding="utf-8")
 
             command = stack.compose_base_command("softos", [primary, secondary], compose_command=["docker", "compose"])
+            generated = stack.federated_compose_path("softos", [primary, secondary])
             self.assertEqual(
                 command,
                 [
@@ -59,9 +60,15 @@ class StackComposeFilesTests(unittest.TestCase):
                     "--project-directory",
                     str(primary.resolve().parent),
                     "-f",
-                    str(primary.resolve()),
-                    "-f",
-                    str(secondary.resolve()),
+                    str(generated.resolve()),
+                ],
+            )
+            payload = __import__("json").loads(generated.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["include"],
+                [
+                    {"path": str(primary.resolve()), "project_directory": str(primary.resolve().parent)},
+                    {"path": str(secondary.resolve()), "project_directory": str(secondary.resolve().parent)},
                 ],
             )
 

@@ -83,7 +83,7 @@ Consecuencia:
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flowctl/features.py`, `../../flowctl/test_slice_verify.py`, `../../specs/features/slice-verify-worktree-root-resolution.spec.md` |
+| `plg-platform-harness` | `../../flowctl/features.py`, `../../flowctl/test_slice_verify.py`, `../../specs/features/slice-verify-worktree-root-resolution.spec.md` |
 
 ## Resultado esperado
 
@@ -123,13 +123,13 @@ Consecuencia:
 
 ```yaml
 - name: slice-verify-root-resolution
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../flowctl/features.py
   hot_area: flowctl/slice-verify-logic
   depends_on: []
 - name: slice-verify-regression-tests
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../flowctl/test_slice_verify.py
     - ../../specs/features/slice-verify-worktree-root-resolution.spec.md

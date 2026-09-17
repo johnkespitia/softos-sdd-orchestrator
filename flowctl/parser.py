@@ -588,6 +588,7 @@ def build_parser(
     ci_spec.add_argument("--changed", action="store_true", help="Validate only specs changed in git diff.")
     ci_spec.add_argument("--base", help="Base git ref for `--changed`.")
     ci_spec.add_argument("--head", help="Head git ref for `--changed`.")
+    ci_spec.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     ci_spec.add_argument("--json", action="store_true", help="Print the CI report as JSON.")
     ci_spec.set_defaults(func=commands["ci_spec"])
 
@@ -765,7 +766,7 @@ def build_parser(
     add_project.add_argument("--submodule-branch", help="Optional branch passed to `git submodule add -b` (requires --submodule-url).")
     add_project.add_argument("--target-root", action="append", help="Override target roots. Repeat to define multiple roots.")
     add_project.add_argument("--default-target", action="append", help="Override default target patterns. Repeat to define multiple patterns.")
-    add_project.add_argument("--test-runner", choices=["none", "php", "pnpm", "pytest", "go"], help="Override the test runner used by `flow slice verify`.")
+    add_project.add_argument("--test-runner", choices=["none", "php", "pnpm", "npm", "pytest", "go"], help="Override the test runner used by `flow slice verify`.")
     add_project.add_argument("--test-hint", help="Override the default `[@test]` hint for this project.")
     add_project.add_argument("--ci-install", help="Override the install command used by `flow ci repo` for this project.")
     add_project.add_argument("--ci-lint", help="Override the lint command used by `flow ci repo` for this project.")
@@ -836,6 +837,7 @@ def build_parser(
 
     spec_review = spec_subparsers.add_parser("review", help="Create a spec review report.")
     spec_review.add_argument("spec", help="Spec path or slug.")
+    spec_review.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     spec_review.add_argument("--json", action="store_true", help="Print a structured review result.")
     spec_review.set_defaults(func=commands["spec_review"])
 
@@ -866,6 +868,7 @@ def build_parser(
 
     plan = subparsers.add_parser("plan", help="Create a default worktree plan from a spec.")
     plan.add_argument("spec", help="Spec path or slug.")
+    plan.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     plan.add_argument(
         "--memory-recall",
         dest="memory_recall",
@@ -883,11 +886,13 @@ def build_parser(
 
     plan_approve = subparsers.add_parser("plan-approve", help="Approve the current generated plan for a spec.")
     plan_approve.add_argument("spec", help="Spec path or slug.")
+    plan_approve.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     plan_approve.add_argument("--approver", help="Identity recorded for the approval. Defaults to FLOW_APPROVER/USER.")
     plan_approve.set_defaults(func=commands["plan_approve"])
 
     plan_approval_status = subparsers.add_parser("plan-approval-status", help="Inspect the formal approval gate for a generated plan.")
     plan_approval_status.add_argument("spec", help="Spec path or slug.")
+    plan_approval_status.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     plan_approval_status.add_argument("--json", action="store_true", help="Print plan approval status as JSON.")
     plan_approval_status.set_defaults(func=commands["plan_approval_status"])
 
@@ -912,10 +917,12 @@ def build_parser(
     evidence_subparsers = evidence.add_subparsers(dest="evidence_command", required=True)
     evidence_status = evidence_subparsers.add_parser("status", help="Summarize release readiness evidence for a spec.")
     evidence_status.add_argument("spec", help="Spec path or slug.")
+    evidence_status.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     evidence_status.add_argument("--json", action="store_true", help="Print evidence status as JSON.")
     evidence_status.set_defaults(func=commands["evidence_status"])
     evidence_bundle = evidence_subparsers.add_parser("bundle", help="Write an evidence bundle under .flow/reports/evidence.")
     evidence_bundle.add_argument("spec", help="Spec path or slug.")
+    evidence_bundle.add_argument("--profile", help="Optional deliverables profile id. Overrides spec-root auto-detection when supplied.")
     evidence_bundle.add_argument("--json", action="store_true", help="Print evidence bundle as JSON.")
     evidence_bundle.set_defaults(func=commands["evidence_bundle"])
 
@@ -937,6 +944,19 @@ def build_parser(
     )
     agent_doctor.add_argument("--json", action="store_true", help="Print availability as JSON.")
     agent_doctor.set_defaults(func=commands["agent_doctor"])
+
+    agent_select = agent_subparsers.add_parser(
+        "select",
+        help="Select an available executor for the orchestrator role.",
+    )
+    agent_select.add_argument(
+        "--role",
+        choices=("orchestrator",),
+        default="orchestrator",
+        help="Role to select. Only orchestrator selection is automatic.",
+    )
+    agent_select.add_argument("--json", action="store_true", help="Print the selection as JSON.")
+    agent_select.set_defaults(func=commands["agent_select"])
 
     agent_run = agent_subparsers.add_parser(
         "run",
@@ -967,6 +987,24 @@ def build_parser(
         "--transport",
         choices=("auto", "acp", "cli"),
         help="Execution transport override. Defaults to the executor configuration.",
+    )
+    agent_run.add_argument(
+        "--role",
+        choices=("orchestrator", "worker", "reviewer"),
+        default=None,
+        help="SoftOS runtime role. Standalone runs default to orchestrator; nested runs default to worker.",
+    )
+    agent_run.add_argument(
+        "--run-id",
+        help="Stable run id. Worker and reviewer runs require it.",
+    )
+    agent_run.add_argument(
+        "--parent-run-id",
+        help="Parent orchestrator run id. Required for worker and reviewer runs.",
+    )
+    agent_run.add_argument(
+        "--handoff",
+        help="Canonical handoff reference. Required for worker and reviewer runs.",
     )
     agent_run.set_defaults(func=commands["agent_run"])
 

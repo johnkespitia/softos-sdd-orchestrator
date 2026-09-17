@@ -188,17 +188,21 @@ def test_none_and_php_runner_validation_preserved(tmp_path: Path) -> None:
 
 def test_effective_test_runner_inherits_pytest_from_python_runtime() -> None:
     flow_module = _load_flow_module("flow_cli_effective_runner_inherit")
-    assert flow_module.effective_test_runner("sdd-workspace-boilerplate") == "pytest"
+    root_repo = flow_module.ROOT_REPO
+    assert root_repo == "plg-platform-harness"
+    assert "sdd-workspace-boilerplate" not in flow_module.REPO_CONFIG
+    assert flow_module.effective_test_runner(root_repo) == "pytest"
 
 
 def test_effective_test_runner_explicit_override_wins() -> None:
     flow_module = _load_flow_module("flow_cli_effective_runner_override")
+    root_repo = flow_module.ROOT_REPO
     original_repo_config = dict(flow_module.REPO_CONFIG)
-    repo_config = dict(flow_module.REPO_CONFIG["sdd-workspace-boilerplate"])
+    repo_config = dict(flow_module.REPO_CONFIG[root_repo])
     repo_config["test_runner"] = "none"
-    flow_module.REPO_CONFIG["sdd-workspace-boilerplate"] = repo_config
+    flow_module.REPO_CONFIG[root_repo] = repo_config
     try:
-        assert flow_module.effective_test_runner("sdd-workspace-boilerplate") == "none"
+        assert flow_module.effective_test_runner(root_repo) == "none"
     finally:
         flow_module.REPO_CONFIG.clear()
         flow_module.REPO_CONFIG.update(original_repo_config)

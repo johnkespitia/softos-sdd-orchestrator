@@ -2,9 +2,9 @@
 schema_version: 3
 name: "ACP Executor Runtime V1"
 description: "Add ACP as an optional preferred transport for supported SoftOS executors while retaining explicit CLI fallback."
-status: draft
+status: approved
 owner: platform
-single_slice_reason: ""
+single_slice_reason: "ACP V1 is a tightly coupled transport/runtime contract; splitting schema, transport, CLI wiring, and evidence would create invalid intermediate states."
 multi_domain: false
 phases: []
 depends_on:
@@ -29,7 +29,11 @@ targets:
   - ../../flowctl/parser.py
   - ../../flowctl/tests/test_acp_transport.py
   - ../../flowctl/tests/test_agent_process_execution.py
-  - ../../docs/**
+  - ../../docs/acp-executor-runtime.md
+  - ../../docs/agent-executors.md
+  - ../../docs/es/agent-executors.es.md
+  - ../../docs/opencode-local-executor.md
+  - ../../docs/es/opencode-local-executor.es.md
   - ../../specs/features/acp-executor-runtime-v1.spec.md
 ---
 
@@ -69,6 +73,40 @@ No Gateway, Patch Unit, Supervisor, scheduler, database, daemon, TUI, model/prov
 - `workspace.config.json` validates with ACP-capable entries for Cursor (`agent acp`), OpenCode (`opencode acp`), and a configurable Codex ACP adapter command; missing Codex adapter is reported as unavailable rather than guessed.
 - Legacy configs without transport continue on CLI with unchanged argv, stream, exit-code, containment, and resource behavior.
 - No credentials, raw prompts, or raw ACP traffic are persisted; structured execution metadata is sufficient to distinguish requested/used transport and fallback.
+
+## Slice Breakdown
+
+```yaml
+- name: acp-executor-runtime
+  repo: plg-platform-harness
+  targets:
+    - ../../workspace.config.json
+    - ../../flowctl/agent_executors.py
+    - ../../flowctl/agent_process_execution.py
+    - ../../flowctl/acp_transport.py
+    - ../../flowctl/parser.py
+    - ../../flowctl/tests/test_acp_transport.py
+    - ../../flowctl/tests/test_agent_process_execution.py
+    - ../../docs/acp-executor-runtime.md
+    - ../../docs/agent-executors.md
+    - ../../docs/es/agent-executors.es.md
+    - ../../docs/opencode-local-executor.md
+    - ../../docs/es/opencode-local-executor.es.md
+    - ../../specs/features/acp-executor-runtime-v1.spec.md
+  hot_area: agent executor transport runtime
+  depends_on: []
+  execution_difficulty: bounded-local
+  runtime_role: orchestrator
+  delegation: none
+  slice_mode: implementation-heavy
+  surface_policy: required
+  minimum_valid_completion: ACP transport and executor schema are wired behind explicit cli/acp/auto selection, legacy CLI paths still pass focused tests, and flow agent run emits metadata-only execution evidence.
+  validated_noop_allowed: false
+  acceptable_evidence:
+    - python3 -m unittest discover -s flowctl/tests -p 'test_acp_transport.py'
+    - python3 -m unittest discover -s flowctl/tests -p 'test_agent_*.py'
+    - git diff --check
+```
 
 ## Verification Matrix
 

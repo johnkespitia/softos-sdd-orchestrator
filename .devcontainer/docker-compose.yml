@@ -9,10 +9,11 @@ services:
     entrypoint: ["/usr/local/share/flow/workspace-entrypoint.sh"]
     volumes:
       - ..:/workspace:cached
+      - ..:${FLOW_HOST_ROOT:-/workspace-host}:cached
       - /var/run/docker.sock:/var/run/docker.sock
       - workspace-pnpm-store:/home/vscode/.local/share/pnpm/store
     environment:
-      ENGRAM_PROJECT: ${ENGRAM_PROJECT:-softos-sdd-orchestrator}
+      ENGRAM_PROJECT: ${ENGRAM_PROJECT:-plg-platform-harness}
       ENGRAM_DATA_DIR: /workspace/.flow/memory/engram
     working_dir: /workspace
     command: sleep infinity
@@ -27,6 +28,7 @@ services:
     entrypoint: ["/usr/local/share/flow/workspace-entrypoint.sh"]
     volumes:
       - ..:/workspace:cached
+      - ..:${FLOW_HOST_ROOT:-/workspace-host}:cached
       - /var/run/docker.sock:/var/run/docker.sock
     env_file:
       - .env.generated

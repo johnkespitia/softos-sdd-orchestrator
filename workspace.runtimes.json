@@ -12,9 +12,17 @@
       "enabled": true,
       "source": "runtimes/node.runtime.json"
     },
+    "node-npm-react-cra": {
+      "enabled": true,
+      "source": "runtimes/node-npm-react-cra.runtime.json"
+    },
     "php": {
       "enabled": true,
       "source": "runtimes/php.runtime.json"
+    },
+    "php-laravel8-apache": {
+      "enabled": true,
+      "source": "runtimes/php-laravel8-apache.runtime.json"
     },
     "python": {
       "enabled": true,

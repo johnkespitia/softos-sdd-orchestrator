@@ -3,19 +3,27 @@
     "required_for_multi_repo": true
   },
   "repos": {
-    "example-api-repo-id": {
+    "plg-platform-backend": {
+      "env_file": "plg-platform-backend/src/.env",
+      "env_template": "plg-platform-backend/src/.env.example",
+      "generate_laravel_app_key": true,
       "required_env_keys": [
-        "API_BASE_URL"
+        "APP_ENV",
+        "APP_KEY",
+        "APP_URL",
+        "DB_CONNECTION",
+        "DB_HOST",
+        "DB_DATABASE",
+        "DB_USERNAME",
+        "DB_PASSWORD"
       ],
-      "readiness_status_cmd": "echo ok",
-      "migration_apply_cmd": ""
+      "bootstrap_cmd": "composer install --no-interaction --prefer-dist --no-progress",
+      "readiness_status_cmd": "php artisan --version && curl -fsS http://127.0.0.1/api/v2/auto/health",
+      "migration_apply_cmd": "php artisan migrate --force"
     },
-    "example-web-repo-id": {
-      "required_env_keys": [
-        "PUBLIC_API_BASE_URL"
-      ],
-      "readiness_status_cmd": "echo ok",
-      "migration_apply_cmd": ""
+    "hub-frontend": {
+      "bootstrap_cmd": "pnpm install --frozen-lockfile",
+      "readiness_status_cmd": "node -v && curl -fsS http://127.0.0.1:5173/"
     }
   }
 }

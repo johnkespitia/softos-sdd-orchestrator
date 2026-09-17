@@ -70,10 +70,10 @@ This is a routing contradiction, not a missing delegation implementation. No dom
 
 | Repository | Target | Responsibility |
 | --- | --- | --- |
-| `sdd-workspace-boilerplate` | `flowctl/tooling.py` | Narrow host allowance and existing repo-exec delegation boundary. |
-| `sdd-workspace-boilerplate` | `flowctl/test_tooling.py` | Repo/service and worktree delegation regression tests. |
-| `sdd-workspace-boilerplate` | `flowctl/tests/test_agent_host_routing.py` | End-to-end global host-enforcement regressions. |
-| `sdd-workspace-boilerplate` | This spec | Canonical scope and evidence contract; remains orchestrator-owned. |
+| `plg-platform-harness` | `flowctl/tooling.py` | Narrow host allowance and existing repo-exec delegation boundary. |
+| `plg-platform-harness` | `flowctl/test_tooling.py` | Repo/service and worktree delegation regression tests. |
+| `plg-platform-harness` | `flowctl/tests/test_agent_host_routing.py` | End-to-end global host-enforcement regressions. |
+| `plg-platform-harness` | This spec | Canonical scope and evidence contract; remains orchestrator-owned. |
 
 ## Compatibility and invariants
 
@@ -90,7 +90,7 @@ This is a routing contradiction, not a missing delegation implementation. No dom
 
 ```yaml
 - name: host-repo-exec-routing
-  repo: sdd-workspace-boilerplate
+  repo: plg-platform-harness
   targets:
     - ../../flowctl/tooling.py
     - ../../flowctl/test_tooling.py
@@ -114,7 +114,7 @@ This is a routing contradiction, not a missing delegation implementation. No dom
 
 ## Acceptance Criteria
 
-1. The spec produces exactly one implementation slice in `sdd-workspace-boilerplate`.
+1. The spec produces exactly one implementation slice in `plg-platform-harness`.
 2. Host `flow repo exec` is not rejected by global host enforcement.
 3. Allowed calls use the existing `command_repo_exec` container delegation path.
 4. `--workdir` maps recognized Git worktrees into the configured repository/workspace service.
@@ -152,7 +152,7 @@ This is a routing contradiction, not a missing delegation implementation. No dom
 
 - name: repo-ci
   level: custom
-  command: python3 ./flow workspace exec -- python3 ./flow ci repo sdd-workspace-boilerplate --spec host-repo-exec-routing-alignment --json
+  command: python3 ./flow workspace exec -- python3 ./flow ci repo plg-platform-harness --spec host-repo-exec-routing-alignment --json
   blocking_on: [ci]
   environments: [local]
   notes: runs applicable root repository CI without changing routing scope

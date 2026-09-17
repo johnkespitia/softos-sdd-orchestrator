@@ -16,6 +16,10 @@
       "enabled": true,
       "source": "capabilities/laravel.capability.json"
     },
+    "laravel8": {
+      "enabled": true,
+      "source": "capabilities/laravel8.capability.json"
+    },
     "nestjs": {
       "enabled": true,
       "source": "capabilities/nestjs.capability.json"
@@ -39,6 +43,10 @@
     "vite-vue": {
       "enabled": true,
       "source": "capabilities/vite-vue.capability.json"
+    },
+    "react-cra": {
+      "enabled": true,
+      "source": "capabilities/react-cra.capability.json"
     },
     "agent-memory-engram": {
       "enabled": true,

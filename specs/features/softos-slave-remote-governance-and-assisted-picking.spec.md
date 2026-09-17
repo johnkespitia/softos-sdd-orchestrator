@@ -112,7 +112,7 @@ Sin gobernanza explícita:
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/parser.py`, `../../flowctl/test_gateway_ops.py`, `../../gateway/app/main.py`, `../../gateway/app/models.py`, `../../gateway/app/store.py`, `../../gateway/tests/test_remote_spec_bridge_api.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../docs/spec-registry-state-contract.md`, `../../README.md`, `../../workspace.config.json`, `../../specs/features/softos-slave-remote-governance-and-assisted-picking.spec.md` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/parser.py`, `../../flowctl/test_gateway_ops.py`, `../../gateway/app/main.py`, `../../gateway/app/models.py`, `../../gateway/app/store.py`, `../../gateway/tests/test_remote_spec_bridge_api.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../docs/spec-registry-state-contract.md`, `../../README.md`, `../../workspace.config.json`, `../../specs/features/softos-slave-remote-governance-and-assisted-picking.spec.md` |
 
 ## Resultado esperado
 

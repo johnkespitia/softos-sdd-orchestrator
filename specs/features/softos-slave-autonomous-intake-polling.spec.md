@@ -116,7 +116,7 @@ la siguiente spec elegible.
 
 | Repo | Targets |
 | --- | --- |
-| `sdd-workspace-boilerplate` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/parser.py`, `../../flowctl/test_gateway_ops.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../README.md`, `../../workspace.config.json`, `../../specs/features/softos-slave-autonomous-intake-polling.spec.md` |
+| `plg-platform-harness` | `../../flow`, `../../flowctl/gateway_ops.py`, `../../flowctl/parser.py`, `../../flowctl/test_gateway_ops.py`, `../../docs/slave-remote-gateway-operator-runbook.md`, `../../README.md`, `../../workspace.config.json`, `../../specs/features/softos-slave-autonomous-intake-polling.spec.md` |
 
 ## Resultado esperado
 

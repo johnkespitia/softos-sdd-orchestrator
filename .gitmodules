@@ -1,0 +1,12 @@
+[submodule "plg-platform-backend"]
+	path = plg-platform-backend
+	url = git@github.com:PLGEducation/plg-platform-backend.git
+[submodule "dashboard-frontend"]
+	path = dashboard-frontend
+	url = git@github.com:PLGEducation/dashboard-frontend.git
+[submodule "hub-frontend"]
+	path = hub-frontend
+	url = git@github.com:PLGEducation/hub-frontend.git
+[submodule "plg-infra"]
+	path = plg-infra
+	url = git@github.com:PLGEducation/plg-infra.git

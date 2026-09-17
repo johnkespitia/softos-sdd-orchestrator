@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Callable, Optional
@@ -132,7 +133,18 @@ def repo_paths_changed_under_roots(repo: str, changed_files: list[str], *, contr
 
 
 def git_output(command: list[str], *, cwd: Optional[Path] = None, root: Path) -> tuple[int, str, str]:
-    result = subprocess.run(command, cwd=cwd or root, capture_output=True, text=True, check=False)
+    env = os.environ.copy()
+    for var in (
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_PREFIX",
+    ):
+        env.pop(var, None)
+    result = subprocess.run(command, cwd=cwd or root, capture_output=True, text=True, check=False, env=env)
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 

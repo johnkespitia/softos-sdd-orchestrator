@@ -1,5 +1,5 @@
 {
-  "name": "Spec-Driven Workspace Boilerplate",
+  "name": "PLG Platform Harness",
   "dockerComposeFile": "docker-compose.yml",
   "service": "workspace",
   "workspaceFolder": "/workspace",

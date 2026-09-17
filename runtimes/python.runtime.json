@@ -31,7 +31,10 @@
     "workspace/softos-staging-promote-preflight",
     "workspace/softos-worktree-hygiene",
     "workspace/spec-driven-workspace",
-    "workspace/python-core"
+    "workspace/python-core",
+    "workspace/softos-code-graph-playbook",
+    "workspace/softos-agent-memory-playbook",
+    "workspace/softos-agent-playbook"
   ],
   "ci": {
     "install": ["pip", "install", "-r", "requirements.txt"],
