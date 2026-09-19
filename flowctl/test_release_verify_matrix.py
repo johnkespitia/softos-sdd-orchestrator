@@ -72,7 +72,7 @@ def test_release_verify_treats_workspace_root_as_governance_only(tmp_path: Path)
         environment="production",
         manifest={
             "repos": {
-                "plg-platform-harness": {
+                "sdd-workspace-boilerplate": {
                     "path": str(tmp_path),
                     "sha": "local-only-root-commit",
                 }

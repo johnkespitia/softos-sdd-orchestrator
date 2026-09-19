@@ -186,6 +186,10 @@ Secuencia recomendada para agentes:
 10. Antes de `release cut`, asegurar que cada `slice verify` sea reciente: el release bloquea si el inventario `changed_files` no existe o si toca rutas fuera de targets/tests aprobados.
 11. No cerrar ciclo sin evidencia de `release verify`.
 
+For direct ACP execution by another harness, use [ACP Executor Runtime V1](acp-executor-runtime.md). A standalone run starts as
+`orchestrator`; delegated runs must carry a new run id, parent run id, worker role, handoff, and disjoint targets. ACP transports one
+execution over stdio and does not create a permanent agent-to-agent channel.
+
 ### 7.0 Tooling externo
 
 BMAD, Tessl, Engram y skills externos se actualizan por capas: binarios del devcontainer,

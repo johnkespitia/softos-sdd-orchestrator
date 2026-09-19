@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import stat
@@ -21,6 +22,7 @@ from flowctl.agent_process_execution import (
     resolve_resource_model,
     resolve_target_within_workdir,
     run_agent_process,
+    validate_handoff_ref,
     validate_process_env_overlay,
     validate_workdir,
 )
@@ -32,6 +34,12 @@ from flowctl.agent_executor_adapters import (
     build_execution_contract,
 )
 from flowctl.agent_executors import AgentExecutor
+from flowctl.agent_roles import (
+    ROLE_ENV_HANDOFF,
+    ROLE_ENV_PARENT_RUN_ID,
+    ROLE_ENV_ROLE,
+    ROLE_ENV_RUN_ID,
+)
 from flowctl.tooling import HOST_EXECUTION_BLOCK_MESSAGE
 
 
@@ -243,6 +251,20 @@ class PathContainmentTests(unittest.TestCase):
             check=False,
         )
 
+    def test_handoff_must_exist_inside_workspace(self) -> None:
+        handoff = self.root / ".flow" / "reports" / "handoff.json"
+        handoff.parent.mkdir(parents=True)
+        handoff.write_text("{}", encoding="utf-8")
+        self.assertEqual(
+            handoff.resolve(),
+            validate_handoff_ref(
+                ".flow/reports/handoff.json",
+                workspace_root=self.root,
+            ),
+        )
+        with self.assertRaisesRegex(AgentRunError, "handoff existente"):
+            validate_handoff_ref(".flow/reports/missing.json", workspace_root=self.root)
+
 
 class SubprocessExecutionTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -325,6 +347,116 @@ class SubprocessExecutionTests(unittest.TestCase):
                         subprocess_run=subprocess.run,
                     )
                 self.assertEqual(expected, exit_code)
+
+    def test_reviewer_requires_explicit_verdict_across_generic_transport(self) -> None:
+        handoff = self.root / "handoff.md"
+        handoff.write_text("handoff", encoding="utf-8")
+
+        def run_with_output(output: bytes) -> tuple[int, AgentRunMetadata]:
+            def fake_run(**kwargs: object) -> object:
+                return subprocess.CompletedProcess(
+                    args=kwargs["args"], returncode=0, stdout=output, stderr=b""
+                )
+
+            with mock.patch(
+                "flowctl.agent_process_execution.resolve_adapter",
+                return_value=self.test_adapter,
+            ):
+                return run_agent_process(
+                    executor=AgentExecutor(
+                        executor_id="test",
+                        adapter="test",
+                        executable=str(self.fake),
+                        argv=(),
+                    ),
+                    repo="softos-agentic",
+                    workspace_root=self.root,
+                    workdir=self.root,
+                    targets=("allowed.txt",),
+                    prompt="review",
+                    shutil_which=lambda _: None,
+                    subprocess_run=fake_run,
+                    role="reviewer",
+                    run_id="review-run",
+                    parent_run_id="orchestrator-run",
+                    handoff_ref=str(handoff),
+                )
+
+        incomplete_code, incomplete_metadata = run_with_output(b"analysis only")
+        self.assertEqual(1, incomplete_code)
+        self.assertEqual("incomplete_review", incomplete_metadata.result)
+        self.assertEqual("incomplete_review", incomplete_metadata.failure_class)
+
+        pass_code, pass_metadata = run_with_output(b"VERDICT: PASS\nall checks passed")
+        self.assertEqual(0, pass_code)
+        self.assertEqual("success", pass_metadata.result)
+
+    def test_completed_success_persists_safe_report_with_full_output(self) -> None:
+        run_id = "run/report success"
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=self.test_adapter,
+        ):
+            exit_code, metadata = run_agent_process(
+                executor=AgentExecutor(
+                    executor_id="test",
+                    adapter="test",
+                    executable=str(self.fake),
+                    argv=("0",),
+                ),
+                repo="softos-agentic",
+                workspace_root=self.root,
+                workdir=self.root,
+                targets=("allowed.txt",),
+                prompt="operator prompt",
+                shutil_which=lambda _: None,
+                subprocess_run=subprocess.run,
+                run_id=run_id,
+            )
+        self.assertEqual(0, exit_code)
+        report_path = self.root / ".flow" / "reports" / "agent-runs" / "run_report_success.json"
+        self.assertTrue(report_path.is_file())
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(run_id, report["run_id"])
+        self.assertEqual("success", report["status"])
+        self.assertEqual(0, report["exit_code"])
+        self.assertEqual("FAKE_STDOUT", report["stdout"])
+        self.assertEqual("FAKE_STDERR", report["stderr"])
+        self.assertEqual("FAKE_STDOUT", base64.b64decode(report["stdout_base64"]).decode())
+        self.assertEqual(0o600, report_path.stat().st_mode & 0o777)
+        self.assertEqual(metadata.run_id, report["run_id"])
+
+    def test_completed_failure_persists_report_and_preserves_exit_code(self) -> None:
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=self.test_adapter,
+        ):
+            exit_code, _metadata = run_agent_process(
+                executor=AgentExecutor(
+                    executor_id="test",
+                    adapter="test",
+                    executable=str(self.fake),
+                    argv=("37",),
+                ),
+                repo="softos-agentic",
+                workspace_root=self.root,
+                workdir=self.root,
+                targets=("allowed.txt",),
+                prompt="operator prompt",
+                shutil_which=lambda _: None,
+                subprocess_run=subprocess.run,
+                run_id="run-failure",
+            )
+        self.assertEqual(37, exit_code)
+        report = json.loads(
+            (self.root / ".flow" / "reports" / "agent-runs" / "run-failure.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("failure", report["status"])
+        self.assertEqual(37, report["exit_code"])
+        self.assertEqual("FAKE_STDOUT", report["stdout"])
+        self.assertEqual("FAKE_STDERR", report["stderr"])
 
     def test_invalid_utf8_child_output_preserves_exact_bytes_and_exit_code(self) -> None:
         noisy = self.root / "noisy-agent"
@@ -986,8 +1118,19 @@ class ResourceProcessOverlayTests(unittest.TestCase):
             )
         self.assertEqual(0, exit_code)
         self.assertEqual("opencode-local", metadata.resource_id)
-        # Local keeps true inheritance: no env= kwarg when overlay is empty.
-        self.assertNotIn("env", captured)
+        # Local keeps the operator config, while runtime identity is always
+        # propagated so nested invocations cannot become orchestrators.
+        env = captured["env"]
+        assert isinstance(env, dict)
+        self.assertEqual("orchestrator", env[ROLE_ENV_ROLE])
+        self.assertEqual("standalone-orchestrator", env[ROLE_ENV_RUN_ID])
+        self.assertEqual("", env[ROLE_ENV_PARENT_RUN_ID])
+        self.assertEqual("", env[ROLE_ENV_HANDOFF])
+        self.assertNotIn("CODEX_SANDBOX_NETWORK_DISABLED", env)
+        self.assertEqual(
+            json.dumps({"default_agent": "softos-local-worker"}),
+            env[OPENCODE_CONFIG_CONTENT_ENV],
+        )
 
     def test_free_resolved_model_reaches_subprocess_overlay(self) -> None:
         prepared = prepare_agent_run(
@@ -1558,6 +1701,159 @@ class ResourceProcessOverlayTests(unittest.TestCase):
             default_discover=lambda: ["zeta-free", "alpha-free"],
         )
         self.assertEqual("alpha-free", model_id)
+
+
+class ReviewerCompletionContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.test_adapter = GenericStdinAdapter(adapter_name="test")
+        self.handoff = self.root / ".flow" / "reports" / "review-handoff.md"
+        self.handoff.parent.mkdir(parents=True)
+        self.handoff.write_text("# review handoff\n", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _write_output_executor(self, name: str, stdout_text: str, *, exit_code: int = 0) -> Path:
+        path = self.root / name
+        path.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            f"sys.stdout.write({stdout_text!r})\n"
+            f"raise SystemExit({exit_code})\n",
+            encoding="utf-8",
+        )
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        return path
+
+    def _run_reviewer(self, fake: Path, *, run_id: str, stream_writer=None):
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=self.test_adapter,
+        ):
+            return run_agent_process(
+                executor=AgentExecutor(
+                    executor_id="test",
+                    adapter="test",
+                    executable=str(fake),
+                    argv=(),
+                ),
+                repo="softos-agentic",
+                workspace_root=self.root,
+                workdir=self.root,
+                targets=("allowed.txt",),
+                prompt="review prompt",
+                shutil_which=lambda _: None,
+                subprocess_run=subprocess.run,
+                stream_writer=stream_writer,
+                role="reviewer",
+                run_id=run_id,
+                parent_run_id="orchestrator-parent",
+                handoff_ref=str(self.handoff),
+            )
+
+    def test_reviewer_pass_verdict_keeps_success(self) -> None:
+        fake = self._write_output_executor(
+            "review-pass",
+            "notes\nVERDICT: PASS\n",
+        )
+        exit_code, metadata = self._run_reviewer(fake, run_id="review-pass")
+        self.assertEqual(0, exit_code)
+        self.assertEqual("success", metadata.result)
+        self.assertIsNone(metadata.failure_class)
+
+    def test_reviewer_changes_required_verdict_keeps_success(self) -> None:
+        fake = self._write_output_executor(
+            "review-changes",
+            "findings\nVERDICT: CHANGES_REQUIRED\n",
+        )
+        exit_code, metadata = self._run_reviewer(fake, run_id="review-changes")
+        self.assertEqual(0, exit_code)
+        self.assertEqual("success", metadata.result)
+        self.assertIsNone(metadata.failure_class)
+
+    def test_reviewer_empty_output_is_incomplete_review(self) -> None:
+        streams: list[tuple[str, bytes]] = []
+
+        def writer(stream: str, payload: bytes) -> None:
+            streams.append((stream, payload))
+
+        fake = self._write_output_executor("review-empty", "")
+        exit_code, metadata = self._run_reviewer(
+            fake,
+            run_id="review-empty",
+            stream_writer=writer,
+        )
+        self.assertEqual(1, exit_code)
+        self.assertEqual("incomplete_review", metadata.result)
+        self.assertEqual("incomplete_review", metadata.failure_class)
+        report_path = self.root / ".flow" / "reports" / "agent-runs" / "review-empty.json"
+        self.assertTrue(report_path.is_file())
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual("incomplete_review", report["status"])
+        self.assertEqual("incomplete_review", report["failure_class"])
+        self.assertEqual(1, report["exit_code"])
+        self.assertEqual([], streams)
+
+    def test_reviewer_output_without_verdict_is_incomplete_review(self) -> None:
+        streams: dict[str, bytes] = {}
+
+        def writer(stream: str, payload: bytes) -> None:
+            streams[stream] = payload
+
+        fake = self._write_output_executor(
+            "review-incomplete",
+            "looks fine but no explicit verdict\n",
+        )
+        exit_code, metadata = self._run_reviewer(
+            fake,
+            run_id="review-incomplete",
+            stream_writer=writer,
+        )
+        self.assertEqual(1, exit_code)
+        self.assertEqual("incomplete_review", metadata.result)
+        self.assertEqual("incomplete_review", metadata.failure_class)
+        self.assertEqual(b"looks fine but no explicit verdict\n", streams["stdout"])
+        report = json.loads(
+            (self.root / ".flow" / "reports" / "agent-runs" / "review-incomplete.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("looks fine but no explicit verdict\n", report["stdout"])
+        self.assertEqual("incomplete_review", report["status"])
+
+    def test_non_reviewer_output_without_verdict_preserves_success(self) -> None:
+        fake = self._write_output_executor(
+            "worker-ok",
+            "FAKE_STDOUT_WITHOUT_VERDICT",
+        )
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=self.test_adapter,
+        ):
+            exit_code, metadata = run_agent_process(
+                executor=AgentExecutor(
+                    executor_id="test",
+                    adapter="test",
+                    executable=str(fake),
+                    argv=(),
+                ),
+                repo="softos-agentic",
+                workspace_root=self.root,
+                workdir=self.root,
+                targets=("allowed.txt",),
+                prompt="worker prompt",
+                shutil_which=lambda _: None,
+                subprocess_run=subprocess.run,
+                role="worker",
+                run_id="worker-ok",
+                parent_run_id="orchestrator-parent",
+                handoff_ref=str(self.handoff),
+            )
+        self.assertEqual(0, exit_code)
+        self.assertEqual("success", metadata.result)
+        self.assertIsNone(metadata.failure_class)
 
 
 if __name__ == "__main__":

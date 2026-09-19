@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+import tempfile
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Sequence
@@ -18,6 +20,14 @@ from flowctl.agent_executor_adapters import (
     resolve_adapter,
 )
 from flowctl.acp_transport import ACPTransport, ACPTransportError
+from flowctl.agent_roles import (
+    AgentRoleError,
+    ROLE_ENV_HANDOFF,
+    ROLE_ENV_PARENT_RUN_ID,
+    ROLE_ENV_ROLE,
+    ROLE_ENV_RUN_ID,
+    normalize_role_context,
+)
 from flowctl.agent_executors import AgentExecutor, AgentRegistryError, load_agent_registry
 from flowctl.agent_resources import (
     AgentResource,
@@ -80,6 +90,11 @@ FORBIDDEN_CONFIG_CONTENT_KEYS = frozenset(
 
 LOCAL_WORKER_AGENT = "softos-local-worker"
 
+# Reviewer runs must emit an explicit line regardless of transport/executor.
+_REVIEWER_EXPLICIT_VERDICT_RE = re.compile(
+    r"(?m)^[ \t]*VERDICT:\s*(?:PASS|CHANGES_REQUIRED)[ \t]*$"
+)
+
 # Production Free/Go discovery uses a bounded OpenCode CLI probe. Injectable in tests.
 OPENCODE_MODELS_PROBE_ARGV = ("models",)
 OPENCODE_MODELS_PROBE_TIMEOUT_SECONDS = 20.0
@@ -114,6 +129,9 @@ class AgentRunMetadata:
     permission_requests: tuple[dict[str, object], ...] = ()
     fallback_reason: Optional[str] = None
     failure_class: Optional[str] = None
+    role: str = "orchestrator"
+    run_id: str = "standalone-orchestrator"
+    parent_run_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -147,6 +165,64 @@ class PreparedAgentRun:
         return (self.executor, self.repo, self.workdir, self.targets, self.prompt)[index]
 
 
+def persist_agent_run_report(
+    *,
+    workspace_root: Path,
+    metadata: AgentRunMetadata,
+    output: Sequence[tuple[str, bytes]],
+) -> Path:
+    """Persist executor output after completion without granting child write access."""
+    safe_run_id = re.sub(r"[^A-Za-z0-9._-]+", "_", metadata.run_id).strip("._") or "run"
+    safe_run_id = safe_run_id[:180]
+    report_root = workspace_root / ".flow" / "reports" / "agent-runs"
+    report_root.mkdir(parents=True, exist_ok=True)
+    report_path = report_root / f"{safe_run_id}.json"
+    payload = asdict(metadata)
+    payload["targets"] = list(metadata.targets)
+    payload["permission_requests"] = list(metadata.permission_requests)
+    streams = {"stdout": bytearray(), "stderr": bytearray()}
+    for stream, chunk in output:
+        streams.setdefault(stream, bytearray()).extend(chunk)
+    payload["status"] = metadata.result
+    payload["permissions"] = {
+        "requests": list(metadata.permission_requests),
+        "report_mode": "0o600",
+    }
+    payload["fallback"] = {
+        "used": metadata.fallback_reason is not None,
+        "reason": metadata.fallback_reason,
+    }
+    payload["output"] = [
+        {"stream": stream, "text": chunk.decode("utf-8", errors="replace")}
+        for stream, chunk in output
+    ]
+    payload["stdout"] = bytes(streams["stdout"]).decode("utf-8", errors="replace")
+    payload["stderr"] = bytes(streams["stderr"]).decode("utf-8", errors="replace")
+    payload["stdout_base64"] = base64.b64encode(bytes(streams["stdout"])).decode("ascii")
+    payload["stderr_base64"] = base64.b64encode(bytes(streams["stderr"])).decode("ascii")
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=report_root,
+            prefix=f".{safe_run_id}-", suffix=".tmp", delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(encoded)
+            temporary.flush()
+            os.fchmod(temporary.fileno(), 0o600)
+        os.replace(temporary_path, report_path)
+        os.chmod(report_path, 0o600)
+    except OSError:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
+    return report_path
+
+
 def path_is_contained(child: Path, parent: Path) -> bool:
     parent_canonical = parent.resolve()
     try:
@@ -154,6 +230,25 @@ def path_is_contained(child: Path, parent: Path) -> bool:
         return True
     except (ValueError, OSError):
         return False
+
+
+def validate_handoff_ref(
+    handoff_ref: str,
+    *,
+    workspace_root: Path,
+) -> Path:
+    candidate = Path(handoff_ref.strip())
+    if not candidate.is_absolute():
+        candidate = workspace_root / candidate
+    try:
+        resolved = candidate.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise AgentRunError("El handoff no pudo resolverse dentro del workspace.") from exc
+    if not path_is_contained(resolved, workspace_root) or not resolved.is_file():
+        raise AgentRunError(
+            "El rol worker/reviewer requiere un handoff existente dentro del workspace."
+        )
+    return resolved
 
 
 def list_registered_worktree_paths(
@@ -302,6 +397,38 @@ def _child_stream_bytes(payload: object) -> bytes:
     if isinstance(payload, bytes):
         return payload
     return str(payload).encode("utf-8")
+
+
+def _captured_output_text(output: Sequence[tuple[str, bytes]]) -> str:
+    chunks: list[str] = []
+    for _stream, payload in output:
+        chunks.append(payload.decode("utf-8", errors="replace"))
+    return "".join(chunks)
+
+
+def reviewer_has_explicit_verdict(output: Sequence[tuple[str, bytes]]) -> bool:
+    """Return True when captured output contains an explicit reviewer verdict line."""
+    return _REVIEWER_EXPLICIT_VERDICT_RE.search(_captured_output_text(output)) is not None
+
+
+def apply_reviewer_completion_contract(
+    *,
+    role: str,
+    exit_code: int,
+    result_status: str,
+    failure_class: Optional[str],
+    output: Sequence[tuple[str, bytes]],
+) -> tuple[int, str, Optional[str]]:
+    """Enforce explicit VERDICT for reviewer success exits.
+
+    Transport/executor agnostic: inspects already-captured streamed output only.
+    Worker and orchestrator semantics are unchanged. Cancelled runs are preserved.
+    """
+    if role != "reviewer" or exit_code != 0 or result_status == "cancelled":
+        return exit_code, result_status, failure_class
+    if reviewer_has_explicit_verdict(output):
+        return exit_code, result_status, failure_class
+    return 1, "incomplete_review", "incomplete_review"
 
 
 def _is_forbidden_overlay_env_key(key: str) -> bool:
@@ -756,12 +883,32 @@ def run_agent_process(
     transport: Optional[str] = None,
     cancel_event=None,
     permission_handler=None,
+    role: str = "orchestrator",
+    run_id: Optional[str] = None,
+    parent_run_id: Optional[str] = None,
+    handoff_ref: Optional[str] = None,
 ) -> tuple[int, AgentRunMetadata]:
     started_at = datetime.now(timezone.utc).isoformat()
     using_default_writer = stream_writer is None
-    writer = stream_writer or _default_stream_writer
+    emitted_output: list[tuple[str, bytes]] = []
+    output_writer = stream_writer or _default_stream_writer
+
+    def writer(stream: str, payload: bytes) -> None:
+        emitted_output.append((stream, payload))
+        output_writer(stream, payload)
+    try:
+        role_context = normalize_role_context(
+            role=role,
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            handoff_ref=handoff_ref,
+        )
+    except AgentRoleError as exc:
+        raise AgentRunError(str(exc)) from exc
     workdir_resolved = str(workdir.resolve())
     workspace_resolved = str(workspace_root.resolve())
+    if role_context.role != "orchestrator":
+        validate_handoff_ref(role_context.handoff_ref or "", workspace_root=workspace_root)
     contract_body = build_execution_contract(
         request=AgentRunRequest(
             executor=executor,
@@ -773,6 +920,10 @@ def run_agent_process(
             contract_body="",
             model=model,
             sandbox=sandbox,
+            role=role_context.role,
+            run_id=role_context.run_id,
+            parent_run_id=role_context.parent_run_id,
+            handoff_ref=role_context.handoff_ref,
         )
     )
     request = AgentRunRequest(
@@ -785,6 +936,10 @@ def run_agent_process(
         contract_body=contract_body,
         model=model,
         sandbox=sandbox,
+        role=role_context.role,
+        run_id=role_context.run_id,
+        parent_run_id=role_context.parent_run_id,
+        handoff_ref=role_context.handoff_ref,
     )
 
     try:
@@ -819,6 +974,14 @@ def run_agent_process(
         if built_overlay or scrub_env_keys:
             env_overlay = built_overlay
 
+    role_overlay = {
+        ROLE_ENV_ROLE: role_context.role,
+        ROLE_ENV_RUN_ID: role_context.run_id,
+        ROLE_ENV_PARENT_RUN_ID: role_context.parent_run_id or "",
+        ROLE_ENV_HANDOFF: role_context.handoff_ref or "",
+    }
+    env_overlay = {**role_overlay, **(env_overlay or {})}
+
     requested_transport = transport or executor.transport
     if requested_transport not in {"cli", "acp", "auto"}:
         raise AgentRunError(f"Transport no soportado: `{requested_transport}`.")
@@ -836,6 +999,37 @@ def run_agent_process(
     cancellation = False
     failure_class: Optional[str] = None
     result_status = "success"
+
+    def persist_runtime_failure(exc: ACPTransportError) -> None:
+        failed_metadata = AgentRunMetadata(
+            executor_id=executor.executor_id,
+            repo=repo,
+            workdir=str(workdir.resolve()),
+            targets=targets,
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            exit_code=1,
+            resource_id=effective_resource_id,
+            transport_requested=requested_transport,
+            transport_used="acp",
+            acp_session_id=acp_session_id,
+            result="failure",
+            cancellation=False,
+            permission_requests=permission_requests,
+            fallback_reason=None,
+            failure_class=f"runtime_failure:{exc.phase}",
+            role=role_context.role,
+            run_id=role_context.run_id,
+            parent_run_id=role_context.parent_run_id,
+        )
+        try:
+            persist_agent_run_report(
+                workspace_root=workspace_root,
+                metadata=failed_metadata,
+                output=emitted_output,
+            )
+        except OSError as persist_exc:
+            print(f"SOFTOS execution failure report persistence failed: {persist_exc}", file=sys.stderr)
 
     def run_cli() -> tuple[int, bytes, bytes]:
         if not executable_is_ready(executor.executable, shutil_which=shutil_which):
@@ -909,10 +1103,12 @@ def run_agent_process(
                 acp_error = exc
                 if requested_transport == "acp" or exc.submitted or not executor.allow_cli_fallback:
                     failure_class = "runtime_failure"
+                    persist_runtime_failure(exc)
                     raise AgentRunError(str(exc), failure_class="runtime_failure") from exc
         if acp_error is not None:
             if requested_transport == "acp" or not executor.allow_cli_fallback:
                 failure_class = "runtime_failure"
+                persist_runtime_failure(acp_error)
                 raise AgentRunError(str(acp_error), failure_class="runtime_failure") from acp_error
             fallback_reason = f"{acp_error.phase}:{acp_error}"
             print(f"SOFTOS ACP fallback: {fallback_reason}", file=sys.stderr)
@@ -925,6 +1121,14 @@ def run_agent_process(
         writer("stdout", stdout)
     if stderr:
         writer("stderr", stderr)
+
+    exit_code, result_status, failure_class = apply_reviewer_completion_contract(
+        role=role_context.role,
+        exit_code=exit_code,
+        result_status=result_status,
+        failure_class=failure_class,
+        output=emitted_output,
+    )
 
     finished_at = datetime.now(timezone.utc).isoformat()
     metadata = AgentRunMetadata(
@@ -944,7 +1148,18 @@ def run_agent_process(
         permission_requests=permission_requests,
         fallback_reason=fallback_reason,
         failure_class=failure_class or ("task_failure" if exit_code != 0 else None),
+        role=role_context.role,
+        run_id=role_context.run_id,
+        parent_run_id=role_context.parent_run_id,
     )
+    try:
+        persist_agent_run_report(
+            workspace_root=workspace_root,
+            metadata=metadata,
+            output=emitted_output,
+        )
+    except OSError as exc:
+        print(f"SOFTOS execution report persistence failed: {exc}", file=sys.stderr)
     return exit_code, metadata
 
 

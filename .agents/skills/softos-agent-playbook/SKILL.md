@@ -20,7 +20,8 @@ Use this skill as the default operating guide for any non-trivial task in this w
 
 1. Read the root spec first if the task touches system behavior, orchestration, or multiple repos.
 2. Resolve repo/runtime context from `workspace.config.json`.
-3. Prefer `flow` commands over direct file edits for lifecycle actions:
+3. Load/apply `workspace/softos-code-graph-playbook` and `workspace/softos-agent-memory-playbook` when navigating or changing code; run `flow code-graph status` for the active repo and refresh if stale/missing before broad exploration. Use Graphify MCP as the preferred structural query path.
+4. Prefer `flow` commands over direct file edits for lifecycle actions:
    - `flow spec review|approve`
    - `flow plan`
    - `flow workflow next-step|execute-feature|run`
@@ -28,26 +29,28 @@ Use this skill as the default operating guide for any non-trivial task in this w
    - `flow release cut|promote|verify|publish`
    - `flow worktree list|clean`
    - `flow stack plan|apply`
-4. When running workspace-managed toolchains from host, use:
+   - `flow agent doctor|list|select|run|handoff` for SoftOS worker/reviewer delegation
+5. When this session is SoftOS `orchestrator` (Cursor, Codex, OpenCode, or Claude Code), load and apply `softos-coding-execution-supervisor` before spawning implementation work. Route children only through host-native `python3 ./flow agent run ...` using the Priority table in `specs/features/coding-execution-runtime-v1.spec.md`. Do not use IDE Task/subagent panels as SoftOS workers.
+6. When running workspace-managed toolchains from host, use:
    - `python3 ./flow workspace exec -- <cmd>`
    - `scripts/workspace_exec.sh <cmd>`
    - or commands that already delegate automatically such as `flow tessl`, `flow bmad`, `flow skills doctor|sync`, and `flow ci repo`
-5. When running repo runtime commands, use:
+7. When running repo runtime commands, use:
    - `python3 ./flow repo exec <repo> -- <cmd>`
    - `python3 ./flow repo exec <repo> --workdir <slice-worktree> -- <cmd>` when the command must validate a materialized slice instead of the base checkout
    - not `workspace exec`, when the repo owns its own compose service
-6. Only edit files covered by spec `targets`.
-7. Treat `status: released` as terminal:
+8. Only edit files covered by spec `targets`.
+9. Treat `status: released` as terminal:
    - valid for strict CI and traceability
    - not valid for re-planning or re-execution
-8. When a slice is governance, enforcement, minimal-change, or verification-only, prefer a compliance closeout over speculative expansion:
+10. When a slice is governance, enforcement, minimal-change, or verification-only, prefer a compliance closeout over speculative expansion:
    - honor `surface_policy`
    - close with `minimum_valid_completion`
    - use `acceptable_evidence`
    - only escalate when there is a real technical blocker, not merely narrow scope
-9. When a spec is already coherent and approved but still leaves meaningful execution choices open, run the second hardening pass from `softos-reference-spec-hardening` before treating it as a stable execution reference.
-10. When schema hardening depends on real environment data, keep the final migration candidate-gated until an executable readiness check says it is safe to enable.
-11. When promoting to `staging`, treat dispatch readiness as a separate decision from local implementation readiness and verify `gh` from the `workspace` devcontainer, not from the host by default.
+11. When a spec is already coherent and approved but still leaves meaningful execution choices open, run the second hardening pass from `softos-reference-spec-hardening` before treating it as a stable execution reference.
+12. When schema hardening depends on real environment data, keep the final migration candidate-gated until an executable readiness check says it is safe to enable.
+13. When promoting to `staging`, treat dispatch readiness as a separate decision from local implementation readiness and verify `gh` from the `workspace` devcontainer, not from the host by default.
 
 ## Rules
 
@@ -56,8 +59,16 @@ Use this skill as the default operating guide for any non-trivial task in this w
 - Use multi-slice governance at spec/planning level; do not try to force parallelism in the scheduler.
 - When a repo already provides its own docker compose or CI pipeline, integrate it instead of duplicating it.
 - If the slice does not require new surface area, do not reopen scope. Produce the minimum valid diff, enforcement, tests, or validated no-op evidence declared by the spec.
+- SoftOS orchestration is host- and vendor-agnostic: the same executor matrix and `flow agent run` contract apply whether the orchestrator seat is Cursor, Codex, OpenCode, or Claude Code. See `softos-coding-execution-supervisor`.
 
 ## Key patterns
+
+### SoftOS executor routing (orchestrators)
+
+- Canonical Priority table: `specs/features/coding-execution-runtime-v1.spec.md`.
+- Detailed supervisor contract: `softos-coding-execution-supervisor`.
+- Host-native only: `python3 ./flow agent doctor` then `python3 ./flow agent run ...`.
+- Same rules for Cursor, Codex, OpenCode, and Claude Code orchestrator seats.
 
 ### Release model
 
