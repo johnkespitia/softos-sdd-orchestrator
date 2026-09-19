@@ -6,8 +6,9 @@ This is a multi-project workspace. Use the nearest `AGENTS.md` plus parent `AGEN
 
 ## Project routing
 
-- Use `backend/AGENTS.md` for backend specs, backend architecture, Tessl workflow, or files under `backend/**`.
-- Use `frontend/AGENTS.md` for frontend specs, design-system work, routing migration, or files under `frontend/**`.
+- Use `example-backend/AGENTS.md` for backend specs, Laravel architecture, runtime commands, or files under `example-backend/**`.
+- Use `example-dashboard/AGENTS.md` for the legacy CRA dashboard under `example-dashboard/**`.
+- Use `example-hub/AGENTS.md` for the Vite + React + TypeScript hub under `example-hub/**`.
 - Use root `specs/**` as the canonical source of truth for system-level features, cross-repo behavior, and orchestration rules.
 
 ## Skills por runtime
@@ -61,6 +62,13 @@ Usa el skill `workspace/skills-discover` cuando necesites buscar skills en tessl
 - `implementation agents`: execute slices with explicit write ownership.
 - `verification agent`: validates evidence and regression risk without expanding functional scope.
 
+Runtime role is assigned by `flow`, not by the model, vendor, or prompt. A
+standalone host-native agent run starts as `orchestrator`; nested runs default to
+`worker`, inherit the current parent run id, and require a new handoff. A child
+cannot explicitly elevate itself to `orchestrator`; `reviewer` remains an
+explicit role plus parent run id and handoff.
+Child runs do not inherit orchestration authority from this file.
+
 ### 2) Ownership rules
 
 - Each agent must receive explicit write ownership by file paths/patterns before execution starts.
@@ -91,11 +99,41 @@ Required gates:
 
 Rule: if a gate is not satisfied, do not advance to the next one.
 
+### 5) BMAD compatibility
+
+BMAD remains the workflow/intake/spec/planning layer. SoftOS runtime roles sit
+under that layer:
+
+`BMAD workflow -> approved spec/plan -> orchestrator -> worker/reviewer runs`.
+
+Workers and reviewers must not run BMAD/workflow orchestration, create child
+agents, self-approve, commit, push, merge, release, or publish.
+
+### 6) SoftOS executor routing (all orchestrator hosts)
+
+This applies to **any** agent sitting in the SoftOS `orchestrator` seat:
+Cursor, Codex (`AGENTS.md`), OpenCode (`flow agent run` / `OPENCODE.md`), or
+Claude Code (`CLAUDE.md` → this file).
+
+- Load `.agents/skills/softos-coding-execution-supervisor/SKILL.md` before
+  delegating implementation or review.
+- Route workers/reviewers **only** via host-native
+  `python3 ./flow agent run <executor|resource> ...` after `flow agent doctor`
+  shows the chosen executor `ready`. Do not use IDE Task/subagent panels as
+  SoftOS workers.
+- Select resources with the Priority table in
+  `specs/features/coding-execution-runtime-v1.spec.md` (filter capabilities
+  first, then priority). Prefer micro Patch Units for `opencode-local`.
+- Accept worker success only with exit `0` **and** authorized non-empty diff,
+  or an explicit verified no-op. SoftOS `result=success` with empty diff is
+  `INVALID_IMPLEMENTATION`.
+
 ## SoftOS operating playbooks
 
 For any AI agent working in this workspace, the following local playbooks are the preferred source of operational guidance:
 
 - `.agents/skills/softos-agent-playbook/SKILL.md`
+- `.agents/skills/softos-coding-execution-supervisor/SKILL.md`
 - `.agents/skills/softos-spec-definition-playbook/SKILL.md`
 - `.agents/skills/softos-reference-spec-hardening/SKILL.md`
 - `.agents/skills/softos-schema-hardening-gates/SKILL.md`
@@ -119,10 +157,12 @@ Apply them when the task touches:
 
 If the coding assistant supports only Markdown policy files instead of `.agents/skills/**`, use:
 
-- `AGENTS.md` as the primary root contract
+- `AGENTS.md` as the primary root contract (**Codex**, and any Markdown-only host)
 - `CURSOR.md` for Cursor CLI fallback context
 - `OPENCODE.md` for OpenCode-style Markdown context loading
+- `CLAUDE.md` for Claude Code entry, then follow `AGENTS.md`
 - `.cursor/rules/softos.mdc` for Cursor native rules
 - `.cursor/rules/softos-enforcement.mdc` for blocking SoftOS guardrails
 
-All three should be kept aligned with the playbooks above.
+All of the above must stay aligned with the playbooks above, especially
+`softos-coding-execution-supervisor` for SoftOS executor routing.

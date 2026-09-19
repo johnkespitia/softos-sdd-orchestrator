@@ -388,6 +388,7 @@ def command_skills_doctor(
     rel: Callable[[Path], str],
     skills_config_file: Path,
     json_dumps: Callable[[object], str],
+    configured_skill_references: Callable[[], list[tuple[str, str]]],
 ) -> int:
     payload = load_skills_config()
     entries, errors = skills_entries(payload)
@@ -442,6 +443,19 @@ def command_skills_doctor(
             findings.append(
                 f"`{entry['name']}` requiere comandos faltantes: {', '.join(sorted(missing_commands))}."
             )
+
+    entries_by_name = {str(entry["name"]): entry for entry in entries}
+    for source, skill_ref in configured_skill_references():
+        entry = entries_by_name.get(skill_ref)
+        if entry is None:
+            finding = f"{source} referencia la skill inexistente `{skill_ref}`."
+            if finding not in findings:
+                findings.append(finding)
+            continue
+        if not bool(entry.get("enabled", False)):
+            finding = f"{source} referencia la skill deshabilitada `{skill_ref}`."
+            if finding not in findings:
+                findings.append(finding)
 
     data["findings"] = findings
     if bool(getattr(args, "json", False)):

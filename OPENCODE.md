@@ -25,6 +25,23 @@ Use this file as the root operational contract when the assistant does not load 
   - `flow release cut|promote|verify|publish`
   - `flow stack plan|apply`
 
+## Runtime agent roles
+
+When started through `flow agent run`, a standalone OpenCode process is an
+`orchestrator` by default. Nested OpenCode processes default to `worker`,
+inherit the current parent run id, and require a new canonical handoff;
+`reviewer` is explicit. A child cannot elevate itself to `orchestrator`.
+Workers execute only their assigned bounded task and do not run BMAD/workflow
+orchestration or create further agents. Reviewers are independent and read-only.
+The role comes from SoftOS, not from the prompt or OpenCode profile.
+
+When this OpenCode process is SoftOS `orchestrator`, apply
+`.agents/skills/softos-coding-execution-supervisor/SKILL.md` and
+`.agents/skills/softos-agent-playbook/SKILL.md`. Delegate workers/reviewers only
+through host-native `python3 ./flow agent run ...` using the Priority table in
+`specs/features/coding-execution-runtime-v1.spec.md`. Do not spawn unmanaged
+child agents for SoftOS implementation slices.
+
 ## CI delegation
 
 - If a repo declares project-owned CI in `workspace.config.json`, SoftOS root CI dispatches it.
@@ -45,6 +62,7 @@ Use this file as the root operational contract when the assistant does not load 
 ## Local playbooks
 
 - `.agents/skills/softos-agent-playbook/SKILL.md`
+- `.agents/skills/softos-coding-execution-supervisor/SKILL.md`
 - `.agents/skills/softos-spec-definition-playbook/SKILL.md`
 - `.agents/skills/softos-reference-spec-hardening/SKILL.md`
 - `.agents/skills/softos-schema-hardening-gates/SKILL.md`

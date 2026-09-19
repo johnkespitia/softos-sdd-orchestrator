@@ -21,7 +21,7 @@ Keep the workspace control plane compose for shared services, but include projec
   - `.devcontainer/docker-compose.yml`
   - `.devcontainer/docker-compose.yaml`
 - Record the compose source in `workspace.config.json` as `compose_file` when known.
-- Build Docker commands with every compose file in the stack, not only the root compose.
+- Build Docker commands with every compose file in the stack, preserving each file's project directory.
 - Preflight checks must validate the combined compose surface.
 
 ## Workspace behavior
@@ -29,7 +29,7 @@ Keep the workspace control plane compose for shared services, but include projec
 Expected model:
 
 1. Root compose remains the base file.
-2. Repo compose files are appended as extra `-f` arguments.
+2. Repo compose files are federated with native Compose `include` entries and an explicit `project_directory` per file. Raw extra `-f` arguments are unsafe because Compose resolves all relative paths from the first file.
 3. `flow stack` and CI use the combined compose list.
 4. `stack apply` avoids injecting a duplicate service into the root compose when the repo compose exists.
 
@@ -42,7 +42,7 @@ Expected model:
 
 ## Validation checklist
 
-1. `compose_base_command()` renders all compose files in order.
+1. `compose_base_command()` renders an operational include manifest with all compose files in order and their own project directories.
 2. A repo with its own compose file is registered with `compose_file`.
 3. `stack apply` reports external compose usage instead of adding a duplicate service.
 4. Preflight still finds `compose_service` in the combined compose config.
