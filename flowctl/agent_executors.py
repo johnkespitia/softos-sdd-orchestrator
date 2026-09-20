@@ -292,6 +292,46 @@ def command_agent_doctor(
     return 0 if all(item["status"] == "ready" for item in results) else 1
 
 
+def command_agent_select(
+    args,
+    *,
+    workspace_config_file: Path,
+    shutil_which: Callable[[str], Optional[str]],
+    json_dumps: Callable[[object], str],
+) -> int:
+    from flowctl.agent_roles import AgentRoleError, select_orchestrator_executor
+
+    if str(getattr(args, "role", "orchestrator")).strip().lower() != "orchestrator":
+        raise SystemExit("La seleccion automatica solo esta disponible para `role=orchestrator`.")
+
+    try:
+        executors = load_agent_registry(workspace_config_file)
+        selected, payload = select_orchestrator_executor(
+            executors,
+            executable_status=lambda executable: executable_status(
+                executable,
+                shutil_which=shutil_which,
+            ),
+        )
+    except (AgentRegistryError, AgentRoleError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+    payload = {
+        **payload,
+        "selected_executor": selected.executor_id,
+        "adapter": selected.adapter,
+        "executable": selected.executable,
+    }
+    if bool(getattr(args, "json", False)):
+        print(json_dumps(payload))
+    else:
+        print(
+            f"{payload['selected']} -> executor={payload['selected_executor']} "
+            f"adapter={payload['adapter']} executable={payload['executable']}"
+        )
+    return 0
+
+
 def command_agent_run(
     args,
     *,
@@ -310,8 +350,15 @@ def command_agent_run(
     # discover_free/discover_go default to None so production uses the OpenCode
     # probe boundary in agent_process_execution; tests may inject fixtures.
     from flowctl.agent_process_execution import AgentRunError, prepare_agent_run, run_agent_process
+    from flowctl.agent_roles import AgentRoleError, resolve_invocation_role
 
     try:
+        role_context = resolve_invocation_role(
+            role=getattr(args, "role", None),
+            run_id=getattr(args, "run_id", None),
+            parent_run_id=getattr(args, "parent_run_id", None),
+            handoff_ref=getattr(args, "handoff", None),
+        )
         prepared = prepare_agent_run(
             executor_id=str(getattr(args, "executor", "")),
             repo_raw=str(getattr(args, "repo", "")),
@@ -340,9 +387,13 @@ def command_agent_run(
             model=getattr(args, "model", None),
             sandbox=getattr(args, "sandbox", None),
             transport=getattr(args, "transport", None),
+            role=role_context.role,
+            run_id=role_context.run_id,
+            parent_run_id=role_context.parent_run_id,
+            handoff_ref=role_context.handoff_ref,
         )
-    except AgentRunError as exc:
-        raise SystemExit(exc.message) from exc
+    except (AgentRoleError, AgentRunError) as exc:
+        raise SystemExit(str(exc)) from exc
 
     # ACP updates are written to stdout while evidence is written to stderr.
     # Flush first so merged terminal output preserves response-before-evidence order.

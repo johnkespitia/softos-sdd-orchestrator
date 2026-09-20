@@ -18,3 +18,7 @@ Use this file as the operational contract for Claude Code in this workspace.
 - `OPENCODE.md`
 - `.cursor/rules/softos.mdc`
 - `.cursor/rules/softos-enforcement.mdc`
+- `.agents/skills/softos-agent-playbook/SKILL.md` when orchestrating SoftOS work
+- `.agents/skills/softos-coding-execution-supervisor/SKILL.md` when delegating
+  workers/reviewers (use SoftOS `flow agent run` + coding-execution Priority
+  table; same contract as Cursor/Codex/OpenCode orchestrators)

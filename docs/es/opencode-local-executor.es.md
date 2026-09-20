@@ -142,15 +142,16 @@ La finalización directa en ~1.02 segundos demuestra que LM Studio y Granite no 
 
 ## 8. Integración del ejecutor de SoftOS
 
-El registro actual de `workspace.config.json` contiene exactamente tres ejecutores:
+El registro actual de `workspace.config.json` contiene cuatro ejecutores de host y metadata de transporte ACP:
 
-| Ejecutor | Adaptador | Ejecutable | `argv` estático |
-| --- | --- | --- | --- |
-| `codex` | `codex` | `codex` | `[]` |
-| `cursor` | `cursor` | `agent` | `[]` |
-| `opencode-local` | `opencode` | `opencode` | `[]` |
+| Ejecutor | Adaptador | Ejecutable CLI | Ejecutable ACP | Transporte |
+| --- | --- | --- | --- | --- |
+| `codex` | `codex` | `codex` | `codex-acp` | `auto` |
+| `cursor` | `cursor` | `agent` | `agent acp` | `auto` |
+| `opencode` | `opencode` | `opencode` | `opencode acp` | `auto` |
+| `opencode-local` | `opencode` | `opencode-softos` | `opencode-softos acp` | `auto` |
 
-El esquema del registro en `flowctl/agent_executors.py` acepta únicamente `adapter`, `executable` y `argv` para un ejecutor. No tiene ningún campo para el modelo, el proveedor o el perfil de OpenCode.
+El esquema del registro en `flowctl/agent_executors.py` acepta los campos base del ejecutor (`adapter`, `executable`, `argv`) más los campos de transporte ACP (`transport`, `allow_cli_fallback`, `permission_policy` y `acp`). Sigue sin tener campos de modelo, proveedor o perfil de OpenCode.
 
 El `OpenCodeAdapter` actual en `flowctl/agent_executor_adapters.py` construye el equivalente de:
 
@@ -158,11 +159,11 @@ El `OpenCodeAdapter` actual en `flowctl/agent_executor_adapters.py` construye el
 opencode run --auto --dir <workdir> -- <delivered-prompt>
 ```
 
-El registro de ejecutores no codifica por sí mismo un agente/perfil de OpenCode. Sin embargo, la selección de `softos-local-worker` se ha **validado mediante configuración por proceso** al pasar `OPENCODE_CONFIG_CONTENT='{"default_agent":"softos-local-worker"}'` al entorno heredado por `flow agent run`. Esto mantiene a SoftOS agnóstico respecto del proveedor/modelo y, a la vez, permite que OpenCode sea responsable de seleccionar el worker.
+El registro de ejecutores no codifica por sí mismo un agente/perfil de OpenCode. `opencode-local` usa el wrapper `opencode-softos` tanto para CLI como para ACP, de modo que la semántica existente del worker/recurso local sigue siendo propiedad de OpenCode mientras SoftOS permanece agnóstico respecto del proveedor/modelo.
 
 Añadir `--agent` mediante `executor.argv` no es una solución actual. Las opciones estáticas de OpenCode están restringidas deliberadamente y `_build_positional_prompt_argv` coloca los argumentos estáticos validados antes de la cola controlada por el adaptador. El adaptador no se ha modificado para seleccionar el worker.
 
-Esto preserva el límite de abstracción correcto, pero deja sin resolver la selección final del perfil del harness.
+Esto preserva el límite de abstracción correcto y permite que otros agentes usen `flow agent run opencode-local ... --transport auto|acp|cli` directamente.
 
 ## 9. Validación operativa
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -414,9 +415,14 @@ def detect_compose_context(
             for raw_path in str(entry.get("ConfigFiles", "")).split(",")
             if raw_path
         ]
-        if resolved_compose_file in config_files:
+        federated_file = (
+            federated_compose_path(default_project, resolved_expected_files).resolve()
+            if len(resolved_expected_files) > 1
+            else None
+        )
+        if resolved_compose_file in config_files or (federated_file is not None and federated_file in config_files):
             context["project"] = str(entry.get("Name") or default_project)
-            context["files"] = config_files or [resolved_compose_file]
+            context["files"] = resolved_expected_files
             context["active"] = True
             return context
 
@@ -453,11 +459,50 @@ def compose_command_prefix() -> list[str]:
     raise SystemExit("No encontre `docker compose` ni `docker-compose` en PATH para operar el stack del workspace.")
 
 
+def federated_compose_path(project: str, compose_files: list[Path]) -> Path:
+    primary = compose_files[0].resolve()
+    workspace_root = primary.parent.parent if primary.parent.name == ".devcontainer" else primary.parent
+    safe_project = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(project)).strip("-") or "workspace"
+    return workspace_root / ".flow" / "state" / f"compose-{safe_project}.federated.yml"
+
+
+def write_federated_compose(project: str, compose_files: list[Path]) -> Path:
+    target = federated_compose_path(project, compose_files)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "include": [
+            {
+                "path": str(path.resolve()),
+                "project_directory": str(path.resolve().parent),
+            }
+            for path in compose_files
+        ]
+    }
+    target.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    return target
+
+
 def compose_base_command(project: str, compose_files: list[Path], compose_command: Optional[list[str]] = None) -> list[str]:
     if not compose_files:
         raise SystemExit("No hay archivos docker-compose configurados para el workspace.")
+    command_prefix = compose_command or compose_command_prefix()
+    if len(compose_files) > 1 and command_prefix[:2] == ["docker", "compose"]:
+        federated_file = write_federated_compose(project, compose_files)
+        return [
+            *command_prefix,
+            "-p",
+            str(project),
+            "--project-directory",
+            str(compose_files[0].resolve().parent),
+            "-f",
+            str(federated_file.resolve()),
+        ]
+    if len(compose_files) > 1:
+        raise SystemExit(
+            "La federacion de compose externos requiere el plugin `docker compose` con soporte para `include`."
+        )
     command = [
-        *(compose_command or compose_command_prefix()),
+        *command_prefix,
         "-p",
         str(project),
         "--project-directory",
@@ -488,16 +533,23 @@ def compose_exec_args(
 
 def run_compose(base_command: list[str], cwd: Path, extra_args: list[str]) -> int:
     try:
-        return subprocess.run(base_command + extra_args, cwd=cwd, check=False).returncode
+        env = os.environ.copy()
+        env.setdefault("SOFTOS_WORKSPACE_ROOT", str(cwd.resolve()))
+        env.setdefault("FLOW_HOST_ROOT", str(cwd.resolve()))
+        return subprocess.run(base_command + extra_args, cwd=cwd, env=env, check=False).returncode
     except FileNotFoundError as exc:
         raise SystemExit("No encontre el runtime Compose configurado en PATH para operar el stack del workspace.") from exc
 
 
 def capture_compose(base_command: list[str], cwd: Path, extra_args: list[str]) -> dict[str, object]:
     try:
+        env = os.environ.copy()
+        env.setdefault("SOFTOS_WORKSPACE_ROOT", str(cwd.resolve()))
+        env.setdefault("FLOW_HOST_ROOT", str(cwd.resolve()))
         result = subprocess.run(
             base_command + extra_args,
             cwd=cwd,
+            env=env,
             capture_output=True,
             text=True,
             check=False,

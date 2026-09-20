@@ -115,7 +115,7 @@ def validate_test_file_for_runner(runner: str, absolute_path: Path) -> tuple[boo
         return valid_python_test_file(absolute_path)
     if normalized_runner == "php":
         return valid_php_test_file(absolute_path)
-    if normalized_runner == "pnpm":
+    if normalized_runner in {"pnpm", "npm"}:
         return valid_pnpm_test_file(absolute_path)
     if normalized_runner == "go":
         return valid_go_test_file(absolute_path)
@@ -209,9 +209,10 @@ def detect_test_command(runner: str, repo_path: Path, test_paths: list[str]) -> 
         if phpunit.exists():
             return [str(phpunit), *test_paths]
 
-    if normalized_runner == "pnpm":
+    if normalized_runner in {"pnpm", "npm"}:
         package_json = repo_path / "package.json"
-        if package_json.exists() and shutil.which("pnpm"):
+        package_manager = normalized_runner
+        if package_json.exists() and shutil.which(package_manager):
             try:
                 package = json.loads(package_json.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
@@ -219,7 +220,7 @@ def detect_test_command(runner: str, repo_path: Path, test_paths: list[str]) -> 
 
             scripts = package.get("scripts", {})
             if isinstance(scripts, dict) and "test" in scripts:
-                return ["pnpm", "test", "--", *test_paths]
+                return [package_manager, "test", "--", *test_paths]
 
     if normalized_runner == "go":
         go_mod = repo_path / "go.mod"

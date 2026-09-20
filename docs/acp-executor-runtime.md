@@ -25,6 +25,25 @@ Use `flow agent run ... --transport cli` or `--transport acp` to compare transpo
 
 ACP permission policy is SoftOS-owned and conservative: `reject` is the default; `allow_once` is explicit. CLI behavior remains unchanged, including its existing adapter flags.
 
+Runtime role selection is unchanged by ACP. A standalone `flow agent run` defaults to `orchestrator`; child invocations inherit run context and default to `worker` unless an explicit allowed role is supplied.
+
+## Direct use by another agent
+
+The root runtime is ready for a separate harness to invoke directly. A standalone run is the orchestrator entrypoint:
+
+```bash
+python3 ./flow agent run cursor \
+  --repo workspace-root \
+  --workdir /path/to/workspace \
+  --target . \
+  --prompt "<task>" \
+  --transport acp
+```
+
+Use `--transport auto` for the configured default. It prefers ACP and falls back to CLI only before the prompt is submitted when the registry allows fallback. This is a per-run execution transport, not a permanent agent-to-agent channel. For delegated work, the orchestrator must provide `--role worker`, a new `--run-id`, `--parent-run-id`, an explicit handoff path, and disjoint target ownership.
+
+Confirm the selected orchestrator and available executors with `python3 ./flow agent select --json` and `python3 ./flow agent doctor --json`. Confirm the actual transport with the `SOFTOS_EXECUTION_EVIDENCE` record emitted on stderr.
+
 ## Discovered entrypoints
 
 - Cursor Agent `agent acp` is installed and exposes native ACP over newline-delimited JSON-RPC stdio.

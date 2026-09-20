@@ -31,6 +31,7 @@ Before making non-trivial edits, Cursor should do all of the following:
 3. Check `AGENTS.md` plus local repo instructions if the target is in a submodule/derived repo.
 4. Prefer `python3 ./flow ...` lifecycle commands over ad hoc scripts.
 5. Keep changes inside the declared `targets`.
+6. If acting as SoftOS orchestrator for implementation, apply `softos-coding-execution-supervisor` and delegate only via host `flow agent run` (not IDE Task panels).
 
 ## Hard prohibitions
 
@@ -39,6 +40,7 @@ Before making non-trivial edits, Cursor should do all of the following:
 - Do not close work as done without relevant SoftOS gates.
 - Do not duplicate CI, release, deploy, or compose behavior when the workspace already declares an integration path.
 - Do not change repos outside `targets` unless the spec is updated first.
+- Do not use IDE Task/subagent panels as SoftOS workers when SoftOS executors are available.
 
 ## Minimum gates before claiming completion
 
@@ -49,6 +51,7 @@ Before making non-trivial edits, Cursor should do all of the following:
 Use these local playbooks for more detail:
 
 - `.agents/skills/softos-agent-playbook/SKILL.md`
+- `.agents/skills/softos-coding-execution-supervisor/SKILL.md`
 - `.agents/skills/softos-spec-definition-playbook/SKILL.md`
 - `.agents/skills/softos-reference-spec-hardening/SKILL.md`
 - `.agents/skills/softos-schema-hardening-gates/SKILL.md`

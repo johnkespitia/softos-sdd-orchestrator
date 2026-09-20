@@ -64,3 +64,26 @@ def test_release_verify_fails_when_release_blocking_profile_fails(tmp_path: Path
     assert payload["status"] == "failed"
     assert payload["features"][0]["verification_profiles"][0]["status"] == "failed"
     assert any("demo-feature" in item for item in payload["findings"])
+
+
+def test_release_verify_treats_workspace_root_as_governance_only(tmp_path: Path) -> None:
+    payload = release._verify_release_from_manifest(
+        version="v1.0.0",
+        environment="production",
+        manifest={
+            "repos": {
+                "sdd-workspace-boilerplate": {
+                    "path": str(tmp_path),
+                    "sha": "local-only-root-commit",
+                }
+            },
+            "features": [],
+        },
+        root=tmp_path,
+        utc_now=lambda: "2026-04-03T00:00:00+00:00",
+        require_pipelines=True,
+    )
+
+    assert payload["status"] == "passed"
+    assert payload["repos"][0]["pipeline_status"] == "not-applicable"
+    assert payload["repos"][0]["remote_verification"] == "governance-root-local-only"
