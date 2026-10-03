@@ -15,6 +15,8 @@ from flowctl.agent_process_execution import (
     AgentRunError,
     AgentRunMetadata,
     OPENCODE_CONFIG_CONTENT_ENV,
+    build_resource_process_overlay,
+    enforce_independent_reviewer_selection,
     execute_subprocess,
     merge_process_environment,
     prepare_agent_run,
@@ -34,13 +36,73 @@ from flowctl.agent_executor_adapters import (
     build_execution_contract,
 )
 from flowctl.agent_executors import AgentExecutor
+from flowctl.agent_resources import (
+    AgentResource,
+    WORK_CLASS_INDEPENDENT_REVIEW,
+    select_resource_candidates,
+)
 from flowctl.agent_roles import (
+    AgentRoleError,
     ROLE_ENV_HANDOFF,
     ROLE_ENV_PARENT_RUN_ID,
     ROLE_ENV_ROLE,
     ROLE_ENV_RUN_ID,
 )
 from flowctl.tooling import HOST_EXECUTION_BLOCK_MESSAGE
+
+
+def _reviewer_gate_resources() -> dict[str, AgentResource]:
+    return {
+        "opencode-local": AgentResource(
+            resource_id="opencode-local",
+            executor_id="opencode-local",
+            capabilities=frozenset({"tool_calling", "write", "local_execution"}),
+            capacity=1,
+            cost_tier="local",
+            selection_priority=10,
+            model_resolution="worker_profile",
+            data_sensitivity="local-only",
+        ),
+        "opencode-free": AgentResource(
+            resource_id="opencode-free",
+            executor_id="opencode",
+            capabilities=frozenset({"tool_calling", "write", "cloud_execution"}),
+            capacity=1,
+            cost_tier="cloud/free",
+            selection_priority=20,
+            model_resolution="dynamic_free",
+            data_sensitivity="cloud-eligible",
+        ),
+        "opencode-go": AgentResource(
+            resource_id="opencode-go",
+            executor_id="opencode",
+            capabilities=frozenset({"tool_calling", "write", "cloud_execution"}),
+            capacity=1,
+            cost_tier="cloud/paid-low",
+            selection_priority=30,
+            model_resolution="dynamic_go",
+            data_sensitivity="cloud-eligible",
+        ),
+    }
+
+
+def _write_reviewer_handoff(
+    path: Path,
+    *,
+    implementer_executor: str = "opencode-local",
+    implementer_model_resolution: str = "worker_profile",
+) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "implementer_executor": implementer_executor,
+                "implementer_model_resolution": implementer_model_resolution,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def _write_config(root: Path, *, agents: object | None = None, repos: object | None = None) -> Path:
@@ -349,8 +411,9 @@ class SubprocessExecutionTests(unittest.TestCase):
                 self.assertEqual(expected, exit_code)
 
     def test_reviewer_requires_explicit_verdict_across_generic_transport(self) -> None:
-        handoff = self.root / "handoff.md"
-        handoff.write_text("handoff", encoding="utf-8")
+        handoff = _write_reviewer_handoff(self.root / "handoff.json")
+        resources = _reviewer_gate_resources()
+        availability = {resource_id: "AVAILABLE" for resource_id in resources}
 
         def run_with_output(output: bytes) -> tuple[int, AgentRunMetadata]:
             def fake_run(**kwargs: object) -> object:
@@ -380,6 +443,8 @@ class SubprocessExecutionTests(unittest.TestCase):
                     run_id="review-run",
                     parent_run_id="orchestrator-run",
                     handoff_ref=str(handoff),
+                    reviewer_resources=resources,
+                    reviewer_availability=availability,
                 )
 
         incomplete_code, incomplete_metadata = run_with_output(b"analysis only")
@@ -921,6 +986,15 @@ class HostNativeRoutingTests(unittest.TestCase):
                 "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
             }
             env.pop("GITHUB_ACTIONS", None)
+            # SoftOS worker/reviewer parent runs inject role env; clear so this
+            # host-native probe stays a standalone orchestrator launch.
+            for key in (
+                ROLE_ENV_ROLE,
+                ROLE_ENV_RUN_ID,
+                ROLE_ENV_PARENT_RUN_ID,
+                ROLE_ENV_HANDOFF,
+            ):
+                env.pop(key, None)
             completed = subprocess.run(
                 [
                     "python3",
@@ -936,6 +1010,8 @@ class HostNativeRoutingTests(unittest.TestCase):
                     "host-native probe",
                     "--target",
                     "flowctl/agent_process_execution.py",
+                    "--transport",
+                    "cli",
                 ],
                 cwd=root,
                 env=env,
@@ -962,6 +1038,16 @@ def _default_agent_resources() -> dict[str, object]:
     return {
         "schema_version": 1,
         "resources": {
+            "opencode-go": {
+                "executor": "opencode",
+                "capabilities": ["tool_calling", "write", "cloud_execution", "architecture"],
+                "capacity": 1,
+                "cost_tier": "cloud/paid-low",
+                "selection_priority": 30,
+                "model_resolution": "dynamic_go",
+                "data_sensitivity": "cloud-eligible",
+                "candidate_tie_break": "lexical",
+            },
             "opencode-local": {
                 "executor": "opencode-local",
                 "capabilities": ["tool_calling", "write", "local_execution"],
@@ -1013,6 +1099,7 @@ def _write_resource_config(root: Path, *, fake_executable: Path) -> Path:
                     "executable": str(fake_executable),
                     "argv": [],
                 },
+
             },
         },
         "agent_resources": _default_agent_resources(),
@@ -1708,9 +1795,13 @@ class ReviewerCompletionContractTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.test_adapter = GenericStdinAdapter(adapter_name="test")
-        self.handoff = self.root / ".flow" / "reports" / "review-handoff.md"
-        self.handoff.parent.mkdir(parents=True)
-        self.handoff.write_text("# review handoff\n", encoding="utf-8")
+        self.handoff = _write_reviewer_handoff(
+            self.root / ".flow" / "reports" / "review-handoff.json"
+        )
+        self.reviewer_resources = _reviewer_gate_resources()
+        self.reviewer_availability = {
+            resource_id: "AVAILABLE" for resource_id in self.reviewer_resources
+        }
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -1751,6 +1842,8 @@ class ReviewerCompletionContractTests(unittest.TestCase):
                 run_id=run_id,
                 parent_run_id="orchestrator-parent",
                 handoff_ref=str(self.handoff),
+                reviewer_resources=self.reviewer_resources,
+                reviewer_availability=self.reviewer_availability,
             )
 
     def test_reviewer_pass_verdict_keeps_success(self) -> None:
@@ -1854,6 +1947,133 @@ class ReviewerCompletionContractTests(unittest.TestCase):
         self.assertEqual(0, exit_code)
         self.assertEqual("success", metadata.result)
         self.assertIsNone(metadata.failure_class)
+
+    def test_reviewer_same_executor_as_implementer_is_blocked_before_spawn(self) -> None:
+        handoff = _write_reviewer_handoff(
+            self.root / ".flow" / "reports" / "same-executor.json",
+            implementer_executor="test",
+            implementer_model_resolution="worker_profile",
+        )
+        fake = self._write_output_executor("review-blocked-executor", "VERDICT: PASS\n")
+        spawned = {"called": False}
+
+        def fake_run(**kwargs: object) -> object:
+            spawned["called"] = True
+            return subprocess.CompletedProcess(
+                args=kwargs["args"], returncode=0, stdout=b"", stderr=b""
+            )
+
+        with mock.patch(
+            "flowctl.agent_process_execution.resolve_adapter",
+            return_value=self.test_adapter,
+        ):
+            with self.assertRaisesRegex(AgentRoleError, "executor del implementador"):
+                run_agent_process(
+                    executor=AgentExecutor(
+                        executor_id="test",
+                        adapter="test",
+                        executable=str(fake),
+                        argv=(),
+                    ),
+                    repo="softos-agentic",
+                    workspace_root=self.root,
+                    workdir=self.root,
+                    targets=("allowed.txt",),
+                    prompt="review prompt",
+                    shutil_which=lambda _: None,
+                    subprocess_run=fake_run,
+                    role="reviewer",
+                    run_id="review-same-executor",
+                    parent_run_id="orchestrator-parent",
+                    handoff_ref=str(handoff),
+                    reviewer_resources=self.reviewer_resources,
+                    reviewer_availability=self.reviewer_availability,
+                )
+        self.assertFalse(spawned["called"])
+
+    def test_reviewer_gate_excludes_same_model_resolution_before_spawn(self) -> None:
+        handoff = _write_reviewer_handoff(
+            self.root / ".flow" / "reports" / "same-resolution.json",
+            implementer_executor="opencode-local",
+            implementer_model_resolution="worker_profile",
+        )
+        selection = enforce_independent_reviewer_selection(
+            handoff_path=handoff,
+            executor=AgentExecutor("codex", "codex", "codex", ()),
+            resource=self.reviewer_resources["opencode-free"],
+            workspace_root=self.root,
+            reviewer_resources=self.reviewer_resources,
+            reviewer_availability=self.reviewer_availability,
+        )
+        self.assertIn("opencode-free", selection["candidates"])
+        self.assertNotIn("opencode-local", selection["candidates"])
+        with self.assertRaisesRegex(AgentRoleError, "no es un reviewer independiente"):
+            enforce_independent_reviewer_selection(
+                handoff_path=handoff,
+                executor=AgentExecutor("opencode-local", "opencode", "opencode", ()),
+                resource=self.reviewer_resources["opencode-local"],
+                workspace_root=self.root,
+                reviewer_resources=self.reviewer_resources,
+                reviewer_availability=self.reviewer_availability,
+            )
+
+    def test_reviewer_gate_routes_through_select_resource_candidates(self) -> None:
+        handoff = _write_reviewer_handoff(
+            self.root / ".flow" / "reports" / "wrapper-wiring.json",
+            implementer_executor="opencode-local",
+            implementer_model_resolution="worker_profile",
+        )
+        with mock.patch(
+            "flowctl.agent_roles.select_resource_candidates",
+            wraps=select_resource_candidates,
+        ) as wrapped:
+            selection = enforce_independent_reviewer_selection(
+                handoff_path=handoff,
+                executor=AgentExecutor("codex", "codex", "codex", ()),
+                resource=self.reviewer_resources["opencode-free"],
+                workspace_root=self.root,
+                reviewer_resources=self.reviewer_resources,
+                reviewer_availability=self.reviewer_availability,
+            )
+        wrapped.assert_called_once()
+        self.assertEqual(
+            WORK_CLASS_INDEPENDENT_REVIEW,
+            wrapped.call_args.kwargs["work_class"],
+        )
+        self.assertIn("opencode-free", selection["candidates"])
+        self.assertNotIn("opencode-local", selection["candidates"])
+
+    def test_reviewer_gate_raises_when_no_independent_candidate(self) -> None:
+        handoff = _write_reviewer_handoff(
+            self.root / ".flow" / "reports" / "no-candidate.json",
+            implementer_executor="opencode-local",
+            implementer_model_resolution="worker_profile",
+        )
+        only_implementer = {
+            "opencode-local": self.reviewer_resources["opencode-local"],
+            "clone": AgentResource(
+                resource_id="clone",
+                executor_id="other",
+                capabilities=frozenset({"tool_calling", "write", "local_execution"}),
+                capacity=1,
+                cost_tier="local",
+                selection_priority=11,
+                model_resolution="worker_profile",
+                data_sensitivity="local-only",
+            ),
+        }
+        with self.assertRaises(AgentRoleError) as ctx:
+            enforce_independent_reviewer_selection(
+                handoff_path=handoff,
+                executor=AgentExecutor("cursor", "cursor", "agent", ()),
+                resource=None,
+                workspace_root=self.root,
+                reviewer_resources=only_implementer,
+                reviewer_availability={
+                    resource_id: "AVAILABLE" for resource_id in only_implementer
+                },
+            )
+        self.assertTrue(ctx.exception.skip_reasons)
 
 
 if __name__ == "__main__":

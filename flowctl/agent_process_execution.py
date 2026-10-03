@@ -26,7 +26,10 @@ from flowctl.agent_roles import (
     ROLE_ENV_PARENT_RUN_ID,
     ROLE_ENV_ROLE,
     ROLE_ENV_RUN_ID,
+    ROLE_ORCHESTRATOR,
+    ROLE_REVIEWER,
     normalize_role_context,
+    select_reviewer_candidates,
 )
 from flowctl.agent_executors import AgentExecutor, AgentRegistryError, load_agent_registry
 from flowctl.agent_resources import (
@@ -249,6 +252,145 @@ def validate_handoff_ref(
             "El rol worker/reviewer requiere un handoff existente dentro del workspace."
         )
     return resolved
+
+
+def load_implementer_identity_from_handoff(handoff_path: Path) -> tuple[str, str]:
+    """Read implementer executor + model_resolution from a reviewer handoff package."""
+    try:
+        text = handoff_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise AgentRoleError(
+            f"No pude leer el handoff del reviewer: {handoff_path}."
+        ) from exc
+
+    payload: object | None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+
+    if isinstance(payload, dict):
+        executor = str(payload.get("implementer_executor") or "").strip()
+        resolution = str(payload.get("implementer_model_resolution") or "").strip()
+        if executor and resolution:
+            return executor, resolution
+        slices = payload.get("slices")
+        if isinstance(slices, list):
+            for item in slices:
+                if not isinstance(item, dict):
+                    continue
+                executor = str(item.get("implementer_executor") or "").strip()
+                resolution = str(item.get("implementer_model_resolution") or "").strip()
+                if executor and resolution:
+                    return executor, resolution
+
+    executor = ""
+    resolution = ""
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("implementer_executor:"):
+            executor = line.split(":", 1)[1].strip().strip("`\"'")
+        elif line.startswith("implementer_model_resolution:"):
+            resolution = line.split(":", 1)[1].strip().strip("`\"'")
+    if executor and resolution:
+        return executor, resolution
+
+    raise AgentRoleError(
+        "El handoff del reviewer requiere `implementer_executor` e "
+        "`implementer_model_resolution`."
+    )
+
+
+def _load_reviewer_resources(workspace_root: Path) -> dict[str, AgentResource]:
+    config_path = workspace_root / "workspace.config.json"
+    if not config_path.is_file():
+        raise AgentRoleError(
+            "El gate de reviewer independiente requiere resources "
+            "(workspace.config.json ausente) o `reviewer_resources` inyectados."
+        )
+    try:
+        executors = load_agent_registry(config_path)
+        workspace_config = json.loads(config_path.read_text(encoding="utf-8"))
+        if not isinstance(workspace_config, dict):
+            raise AgentRoleError("workspace.config.json invalido para el gate de reviewer.")
+        return parse_resource_registry(workspace_config, executors=executors)
+    except (OSError, json.JSONDecodeError, AgentRegistryError, AgentResourceError) as exc:
+        message = getattr(exc, "message", str(exc))
+        raise AgentRoleError(
+            f"No pude cargar resources para el gate de reviewer: {message}."
+        ) from exc
+
+
+def enforce_independent_reviewer_selection(
+    *,
+    handoff_path: Path,
+    executor: AgentExecutor,
+    resource: Optional[AgentResource],
+    workspace_root: Path,
+    reviewer_resources: Optional[Mapping[str, AgentResource]] = None,
+    reviewer_availability: Optional[Mapping[str, object]] = None,
+    reviewer_required_capabilities: Optional[Sequence[str]] = None,
+    reviewer_data_sensitivity: Optional[str] = None,
+) -> dict[str, object]:
+    """RB4 launch gate: select independent reviewers before spawning."""
+    implementer_executor, implementer_model_resolution = (
+        load_implementer_identity_from_handoff(handoff_path)
+    )
+    resources = (
+        dict(reviewer_resources)
+        if reviewer_resources is not None
+        else _load_reviewer_resources(workspace_root)
+    )
+    availability = (
+        dict(reviewer_availability)
+        if reviewer_availability is not None
+        else {resource_id: "AVAILABLE" for resource_id in resources}
+    )
+    candidates, selection = select_reviewer_candidates(
+        resources,
+        availability=availability,
+        implementer_executor=implementer_executor,
+        implementer_model_resolution=implementer_model_resolution,
+        required_capabilities=reviewer_required_capabilities,
+        data_sensitivity=reviewer_data_sensitivity,
+    )
+
+    if resource is not None:
+        if resource.resource_id not in candidates:
+            raise AgentRoleError(
+                f"Resource `{resource.resource_id}` no es un reviewer independiente "
+                f"respecto de implementer_executor=`{implementer_executor}` / "
+                f"implementer_model_resolution=`{implementer_model_resolution}`.",
+                skip_reasons=selection.get("excluded")  # type: ignore[arg-type]
+                if isinstance(selection.get("excluded"), list)
+                else None,
+            )
+        if resource.executor_id == implementer_executor:
+            raise AgentRoleError(
+                f"El reviewer no puede reutilizar el executor del implementador "
+                f"`{implementer_executor}`.",
+                skip_reasons=selection.get("excluded")  # type: ignore[arg-type]
+                if isinstance(selection.get("excluded"), list)
+                else None,
+            )
+        if resource.model_resolution == implementer_model_resolution:
+            raise AgentRoleError(
+                f"El reviewer no puede compartir model_resolution "
+                f"`{implementer_model_resolution}` con el implementador.",
+                skip_reasons=selection.get("excluded")  # type: ignore[arg-type]
+                if isinstance(selection.get("excluded"), list)
+                else None,
+            )
+    elif executor.executor_id == implementer_executor:
+        raise AgentRoleError(
+            f"El reviewer no puede reutilizar el executor del implementador "
+            f"`{implementer_executor}`.",
+            skip_reasons=selection.get("excluded")  # type: ignore[arg-type]
+            if isinstance(selection.get("excluded"), list)
+            else None,
+        )
+
+    return selection
 
 
 def list_registered_worktree_paths(
@@ -524,11 +666,13 @@ def build_resource_process_overlay(
     """Build a resource-specific process overlay and scrub set.
 
     - ``worker_profile`` (local): empty overlay; preserve inherited worker/profile contract.
+    - ``process_override`` (local Pi): empty overlay; the model travels as an explicit
+      process-local ``-m/--model`` override on the invocation and is never persisted.
     - ``dynamic_free`` / ``dynamic_go``: set ``OPENCODE_CONFIG_CONTENT`` with the resolved
       model only; scrub local OpenCode config carriers so Free/Go do not inherit local
       worker/profile/model/provider configuration.
     """
-    if resource.model_resolution == "worker_profile":
+    if resource.model_resolution in {"wrapper_profile", "worker_profile", "process_override"}:
         return {}, frozenset()
 
     if resource.model_resolution not in {"dynamic_free", "dynamic_go"}:
@@ -718,7 +862,7 @@ def resolve_resource_model(
     Go auth defaults to a supported OpenCode auth probe when callers omit explicit
     evidence.
     """
-    if resource.model_resolution == "worker_profile":
+    if resource.model_resolution in {"wrapper_profile", "worker_profile", "process_override"}:
         return None
 
     if resource.model_resolution == "dynamic_free":
@@ -887,6 +1031,10 @@ def run_agent_process(
     run_id: Optional[str] = None,
     parent_run_id: Optional[str] = None,
     handoff_ref: Optional[str] = None,
+    reviewer_resources: Optional[Mapping[str, AgentResource]] = None,
+    reviewer_availability: Optional[Mapping[str, object]] = None,
+    reviewer_required_capabilities: Optional[Sequence[str]] = None,
+    reviewer_data_sensitivity: Optional[str] = None,
 ) -> tuple[int, AgentRunMetadata]:
     started_at = datetime.now(timezone.utc).isoformat()
     using_default_writer = stream_writer is None
@@ -907,8 +1055,25 @@ def run_agent_process(
         raise AgentRunError(str(exc)) from exc
     workdir_resolved = str(workdir.resolve())
     workspace_resolved = str(workspace_root.resolve())
-    if role_context.role != "orchestrator":
-        validate_handoff_ref(role_context.handoff_ref or "", workspace_root=workspace_root)
+    handoff_path: Path | None = None
+    if role_context.role != ROLE_ORCHESTRATOR:
+        handoff_path = validate_handoff_ref(
+            role_context.handoff_ref or "",
+            workspace_root=workspace_root,
+        )
+    if role_context.role == ROLE_REVIEWER:
+        if handoff_path is None:
+            raise AgentRoleError("El rol reviewer requiere un handoff valido.")
+        enforce_independent_reviewer_selection(
+            handoff_path=handoff_path,
+            executor=executor,
+            resource=resource,
+            workspace_root=workspace_root,
+            reviewer_resources=reviewer_resources,
+            reviewer_availability=reviewer_availability,
+            reviewer_required_capabilities=reviewer_required_capabilities,
+            reviewer_data_sensitivity=reviewer_data_sensitivity,
+        )
     contract_body = build_execution_contract(
         request=AgentRunRequest(
             executor=executor,
