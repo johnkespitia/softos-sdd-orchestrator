@@ -76,30 +76,61 @@ if [[ "$MODE" == "range" ]] && { [[ -z "$BASE_SHA" ]] || [[ -z "$HEAD_SHA" ]]; }
   exit 2
 fi
 
-if [[ ! -f scripts/guardrails/boilerplate_protected_paths.txt ]]; then
-  echo "Missing scripts/guardrails/boilerplate_protected_paths.txt" >&2
+PROTECTED_LIST="scripts/guardrails/boilerplate_protected_paths.txt"
+
+if [[ ! -f "$PROTECTED_LIST" ]]; then
+  echo "Missing $PROTECTED_LIST" >&2
   exit 2
 fi
 
-mapfile -t CHANGED_FILES < <(
-  if [[ "$MODE" == "staged" ]]; then
-    git diff --cached --name-only --diff-filter=ACMR
-  else
-    git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA"
+# Capture command output into a variable before splitting it. A process
+# substitution (< <(...)) never propagates the inner exit status to the parent,
+# so under `set -e` a failed `rg`/`git diff` used to leave the array empty and
+# the guardrail silently passed with zero patterns checked.
+CHANGED_OUTPUT=""
+if [[ "$MODE" == "staged" ]]; then
+  if ! CHANGED_OUTPUT="$(git diff --cached --name-only --diff-filter=ACMR)"; then
+    echo "Guardrail: failed to list staged files." >&2
+    exit 2
   fi
-)
+else
+  if ! CHANGED_OUTPUT="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA")"; then
+    echo "Guardrail: failed to list changed files for range $BASE_SHA..$HEAD_SHA." >&2
+    exit 2
+  fi
+fi
 
-if [[ ${#CHANGED_FILES[@]} -eq 0 ]]; then
+mapfile -t CHANGED_FILES <<< "$CHANGED_OUTPUT"
+
+if [[ ${#CHANGED_FILES[@]} -eq 0 || -z "${CHANGED_FILES[0]}" ]]; then
   exit 0
 fi
 
-mapfile -t PATTERNS < <(
-  sed -e 's/[[:space:]]*$//' scripts/guardrails/boilerplate_protected_paths.txt \
-    | rg -v '^\s*(#|$)'
-)
+RAW_PATTERNS=""
+if ! RAW_PATTERNS="$(sed -e 's/[[:space:]]*$//' "$PROTECTED_LIST")"; then
+  echo "Guardrail: failed to read $PROTECTED_LIST." >&2
+  exit 2
+fi
 
-if [[ ${#PATTERNS[@]} -eq 0 ]]; then
-  exit 0
+# Prefer `rg`, fall back to `grep -E` where ripgrep is not installed (the
+# devcontainer image ships without it). Both filters are invoked for their
+# output only, so a non-zero "no match" status must not abort the script.
+PATTERN_OUTPUT=""
+if command -v rg >/dev/null 2>&1; then
+  PATTERN_OUTPUT="$(printf '%s\n' "$RAW_PATTERNS" | rg -v '^[[:space:]]*(#|$)')" || true
+elif command -v grep >/dev/null 2>&1; then
+  PATTERN_OUTPUT="$(printf '%s\n' "$RAW_PATTERNS" | grep -v -E '^[[:space:]]*(#|$)')" || true
+else
+  echo "Guardrail: neither rg nor grep is available to read $PROTECTED_LIST." >&2
+  exit 2
+fi
+
+mapfile -t PATTERNS <<< "$PATTERN_OUTPUT"
+
+if [[ ${#PATTERNS[@]} -eq 0 || -z "${PATTERNS[0]}" ]]; then
+  echo "Guardrail: resolved 0 protected-path patterns from $PROTECTED_LIST" >&2
+  echo "Guardrail: the filter is unavailable or the list is empty; refusing to pass vacuously." >&2
+  exit 2
 fi
 
 VIOLATIONS=()
