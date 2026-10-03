@@ -117,6 +117,10 @@ def agent_handoff_payload(
                 "acceptable_evidence": item.get("acceptable_evidence", []),
                 "executor_mode": str(item.get("executor_mode", "")),
                 "closeout_rule": str(item.get("closeout_rule", "")),
+                "implementer_executor": str(item.get("implementer_executor", "")),
+                "implementer_model_resolution": str(
+                    item.get("implementer_model_resolution", "")
+                ),
             }
             for item in slices
         ],

@@ -25,6 +25,7 @@ from flowctl.agent_executors import (
 
 RESOURCES_SCHEMA_VERSION = 1
 REQUIRED_RESOURCE_IDS = ("opencode-local", "opencode-free", "opencode-go")
+ALLOWED_RESOURCE_IDS = frozenset(REQUIRED_RESOURCE_IDS)
 
 AVAILABILITY_STATES = frozenset(
     {
@@ -43,7 +44,9 @@ AVAILABILITY_STATES = frozenset(
 SELECTABLE_AVAILABILITY_STATES = frozenset({"AVAILABLE"})
 
 COST_TIERS = frozenset({"local", "cloud/free", "cloud/paid-low"})
-MODEL_RESOLUTION_POLICIES = frozenset({"worker_profile", "dynamic_free", "dynamic_go"})
+MODEL_RESOLUTION_POLICIES = frozenset(
+    {"wrapper_profile", "worker_profile", "dynamic_free", "dynamic_go", "process_override"}
+)
 DATA_SENSITIVITY_CLASSES = frozenset({"local-only", "cloud-eligible"})
 CANDIDATE_TIE_BREAKS = frozenset({"lexical"})
 
@@ -85,6 +88,33 @@ FORBIDDEN_RESOURCE_FIELDS = frozenset(
 )
 
 DiscoverModelsFn = Callable[[], Sequence[str]]
+
+# RB1 declared preferred_order chains by work class (resource/executor ids only;
+# never concrete model names). Filtering always runs before these orders apply.
+WORK_CLASS_MICRO = "micro"
+WORK_CLASS_BOUNDED = "bounded"
+WORK_CLASS_ARCHITECTURE = "architecture"
+WORK_CLASS_INDEPENDENT_REVIEW = "independent_review"
+SUPPORTED_WORK_CLASSES = frozenset(
+    {
+        WORK_CLASS_MICRO,
+        WORK_CLASS_BOUNDED,
+        WORK_CLASS_ARCHITECTURE,
+        WORK_CLASS_INDEPENDENT_REVIEW,
+    }
+)
+
+PREFERRED_ORDER_MICRO = ("opencode-local", "opencode-free")
+PREFERRED_ORDER_BOUNDED = ("opencode-local", "opencode-free")
+PREFERRED_ORDER_ARCHITECTURE = ("codex", "cursor", "opencode-go")
+PREFERRED_ORDER_INDEPENDENT_REVIEW = ("codex", "cursor", "opencode-free")
+
+PREFERRED_ORDER_BY_WORK_CLASS: dict[str, tuple[str, ...]] = {
+    WORK_CLASS_MICRO: PREFERRED_ORDER_MICRO,
+    WORK_CLASS_BOUNDED: PREFERRED_ORDER_BOUNDED,
+    WORK_CLASS_ARCHITECTURE: PREFERRED_ORDER_ARCHITECTURE,
+    WORK_CLASS_INDEPENDENT_REVIEW: PREFERRED_ORDER_INDEPENDENT_REVIEW,
+}
 
 
 class AgentResourceError(Exception):
@@ -230,8 +260,10 @@ def parse_resource_registry(
                 f"`agent_resources.resources.{resource_id_str}.capacity` debe ser un entero >= 1; "
                 f"recibido `{capacity!r}`."
             )
-        if resource_id_str == "opencode-local" and capacity != 1:
-            raise AgentResourceError("`agent_resources.resources.opencode-local.capacity` debe ser 1.")
+        if resource_id_str in {"opencode-local",} and capacity != 1:
+            raise AgentResourceError(
+                f"`agent_resources.resources.{resource_id_str}.capacity` debe ser 1."
+            )
 
         cost_tier = entry.get("cost_tier")
         if not isinstance(cost_tier, str) or cost_tier not in COST_TIERS:
@@ -252,10 +284,11 @@ def parse_resource_registry(
                 f"`agent_resources.resources.{resource_id_str}.model_resolution` invalido: "
                 f"`{model_resolution!r}`."
             )
-        if resource_id_str == "opencode-local" and model_resolution != "worker_profile":
+        if resource_id_str == "opencode-local" and model_resolution not in {"worker_profile", "process_override"}:
             raise AgentResourceError(
                 "`agent_resources.resources.opencode-local.model_resolution` debe ser `worker_profile` "
-                "(el worker/profile del repositorio posee model/provider)."
+                "o `process_override` (el worker/profile del repositorio posee model/provider; "
+                "un override process-local tambien es valido)."
             )
         if resource_id_str == "opencode-free" and model_resolution != "dynamic_free":
             raise AgentResourceError(
@@ -332,6 +365,17 @@ def default_availability_for_resource(
     return normalize_availability(evidence)
 
 
+def preferred_order_for_work_class(work_class: object) -> tuple[str, ...]:
+    """Return the declared RB1 preferred_order chain for a work class."""
+    key = str(work_class or "").strip().lower()
+    if key not in PREFERRED_ORDER_BY_WORK_CLASS:
+        raise AgentResourceError(
+            f"Clase de trabajo desconocida `{work_class!r}`. "
+            f"Valores validos: {', '.join(sorted(SUPPORTED_WORK_CLASSES))}."
+        )
+    return PREFERRED_ORDER_BY_WORK_CLASS[key]
+
+
 def filter_resources_for_selection(
     resources: Mapping[str, AgentResource],
     *,
@@ -360,21 +404,77 @@ def order_resource_candidates(
     *,
     preferred_order: Optional[Sequence[str]] = None,
 ) -> list[str]:
-    """Deterministic candidate ordering with lexical resource-id tie-break.
+    """Deterministic candidate ordering after capability filtering.
 
     When `preferred_order` is provided (policy table), preserve that relative
-    order for ids still present after filtering. Otherwise sort by
-    selection_priority ascending, then resource_id.
+    order for ids still present after filtering; absent preferred ids are
+    skipped without breaking the chain. `selection_priority` only tie-breaks
+    among remainder ids not listed in the preferred chain (ascending, then
+    lexical resource_id). Without `preferred_order`, sort by selection_priority
+    ascending, then resource_id.
     """
     present = [resource_id for resource_id in candidate_ids if resource_id in resources]
+    present_set = set(present)
     if preferred_order is not None:
-        preferred = [resource_id for resource_id in preferred_order if resource_id in present]
-        remainder = sorted(resource_id for resource_id in present if resource_id not in preferred)
+        preferred = [
+            resource_id for resource_id in preferred_order if resource_id in present_set
+        ]
+        preferred_set = set(preferred)
+        remainder = sorted(
+            (resource_id for resource_id in present if resource_id not in preferred_set),
+            key=lambda resource_id: (
+                resources[resource_id].selection_priority,
+                resource_id,
+            ),
+        )
         return preferred + remainder
     return sorted(
         present,
         key=lambda resource_id: (resources[resource_id].selection_priority, resource_id),
     )
+
+
+def select_resource_candidates(
+    resources: Mapping[str, AgentResource],
+    *,
+    availability: Mapping[str, object],
+    work_class: str,
+    required_capabilities: Optional[Sequence[str]] = None,
+    data_sensitivity: Optional[str] = None,
+    preferred_order: Optional[Sequence[str]] = None,
+) -> tuple[list[str], dict[str, object]]:
+    """Apply capability filtering then the declared preferred_order for a work class.
+
+    This is the production wiring for `filter_resources_for_selection` +
+    `order_resource_candidates(preferred_order=...)`. Numeric
+    `selection_priority` never overrides the declared chain.
+    When `preferred_order` is omitted, the chain comes from `work_class`.
+    """
+    resolved_order = (
+        tuple(str(item).strip() for item in preferred_order if str(item).strip())
+        if preferred_order is not None
+        else preferred_order_for_work_class(work_class)
+    )
+    filtered = filter_resources_for_selection(
+        resources,
+        availability=availability,
+        required_capabilities=required_capabilities,
+        data_sensitivity=data_sensitivity,
+    )
+    ordered = order_resource_candidates(
+        filtered,
+        resources,
+        preferred_order=resolved_order,
+    )
+    payload: dict[str, object] = {
+        "work_class": str(work_class).strip().lower(),
+        "candidates": ordered,
+        "selected": ordered[0] if ordered else None,
+        "preferred_order": list(resolved_order),
+        "filtered": filtered,
+        "selection_basis": "capability_filter_then_preferred_order",
+    }
+    return ordered, payload
 
 
 def resolve_free_model(
@@ -402,7 +502,7 @@ def resolve_free_model(
         if not isinstance(item, str):
             continue
         model_id = item.strip()
-        if model_id.endswith("-free"):
+        if model_id.endswith("-free") and not model_id.startswith("opencode-go/"):
             candidates.append(model_id)
 
     if not candidates:
@@ -472,7 +572,7 @@ def resolve_go_model(
 def _assert_no_concrete_identity_branching(resources: Mapping[str, AgentResource]) -> None:
     """Core metadata must not encode concrete provider/model routing branches."""
     for resource in resources.values():
-        if resource.model_resolution == "worker_profile":
+        if resource.model_resolution in {"wrapper_profile", "worker_profile", "process_override"}:
             continue
         if resource.model_resolution not in {"dynamic_free", "dynamic_go"}:
             raise AgentResourceError(

@@ -200,6 +200,15 @@ class ResourceRegistryValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(AgentResourceError, "worker_profile"):
             parse_resource_registry(_config(agent_resources=agent_resources))
 
+    def test_process_override_model_resolution_is_accepted(self) -> None:
+        # process_override (e.g. a host-local override CLI) is a valid policy;
+        # the resource is host-provided and never part of the required/allowed
+        # canonical set.
+        agent_resources = _base_agent_resources()
+        agent_resources["resources"]["opencode-local"]["model_resolution"] = "process_override"  # type: ignore[index]
+        resources = parse_resource_registry(_config(agent_resources=agent_resources))
+        self.assertEqual("process_override", resources["opencode-local"].model_resolution)
+
     def test_duplicate_resource_keys_fail_on_load(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "workspace.config.json"
@@ -352,6 +361,22 @@ class DynamicModelResolutionTests(unittest.TestCase):
         )
         self.assertEqual("AVAILABLE", result.availability)
         self.assertEqual("alpha-free", result.model_id)
+
+    def test_resolve_free_model_selects_opencode_namespace_over_go_collision(self) -> None:
+        result = resolve_free_model(
+            discover=lambda: [
+                "opencode-go/alpha-free",
+                "opencode/alpha-free",
+            ],
+        )
+        self.assertEqual("AVAILABLE", result.availability)
+        self.assertEqual("opencode/alpha-free", result.model_id)
+
+    def test_resolve_free_model_with_only_go_free_candidates_is_model_unavailable(self) -> None:
+        result = resolve_free_model(
+            discover=lambda: ["opencode-go/alpha-free", "opencode-go/zeta-free"],
+        )
+        self.assertEqual("MODEL_UNAVAILABLE", result.availability)
 
     def test_resolve_free_model_without_candidates_is_model_unavailable(self) -> None:
         result = resolve_free_model(discover=lambda: ["paid-pro", "enterprise"])

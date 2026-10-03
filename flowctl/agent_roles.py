@@ -3,9 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 import uuid
-from typing import Callable, Mapping, Optional
+from typing import Callable, Mapping, Optional, Sequence
 
 from .agent_executors import AgentExecutor
+from .agent_resources import (
+    AgentResource,
+    WORK_CLASS_INDEPENDENT_REVIEW,
+    normalize_availability,
+    select_resource_candidates,
+    SELECTABLE_AVAILABILITY_STATES,
+)
 
 ROLE_ORCHESTRATOR = "orchestrator"
 ROLE_WORKER = "worker"
@@ -18,11 +25,24 @@ ROLE_ENV_HANDOFF = "SOFTOS_AGENT_HANDOFF"
 
 # Orchestration selection is capability-oriented and model-agnostic. A resource
 # can still fail at launch when its provider/model evidence is unavailable.
+# `antigravity` stays absent until RB5 admission: dedicated adapter + registry
+# entry + doctor ready (see docs/agent-executors.md). Do not append it here
+# while that gap remains.
 ORCHESTRATOR_EXECUTOR_PRIORITY = ("codex", "cursor", "opencode-go", "opencode")
+
+# RB1 independent-review preference chain (resource/executor ids, never model names).
+INDEPENDENT_REVIEW_PREFERRED_ORDER = ("codex", "cursor", "opencode-free")
 
 
 class AgentRoleError(ValueError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        skip_reasons: Optional[Sequence[Mapping[str, object]]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.skip_reasons = [dict(item) for item in (skip_reasons or ())]
 
 
 @dataclass(frozen=True)
@@ -150,3 +170,123 @@ def select_orchestrator_executor(
         "No hay un executor disponible para el rol `orchestrator`. "
         + "; ".join(f"{item['id']}={item['status']}" for item in candidates)
     )
+
+
+def select_reviewer_candidates(
+    resources: Mapping[str, AgentResource],
+    *,
+    availability: Mapping[str, object],
+    implementer_executor: str,
+    implementer_model_resolution: str,
+    required_capabilities: Optional[Sequence[str]] = None,
+    data_sensitivity: Optional[str] = None,
+    preferred_order: Sequence[str] = INDEPENDENT_REVIEW_PREFERRED_ORDER,
+) -> tuple[list[str], dict[str, object]]:
+    """Select independent reviewer resource candidates (RB4).
+
+    Excludes the implementer executor and model_resolution, then applies
+    capability/availability/sensitivity filtering and preferred_order. Routing
+    never uses a concrete model name — only family signals (cost_tier /
+    model_resolution).
+    """
+    implementer_exec = str(implementer_executor or "").strip()
+    implementer_resolution = str(implementer_model_resolution or "").strip()
+    if not implementer_exec or not implementer_resolution:
+        raise AgentRoleError(
+            "select_reviewer_candidates requiere implementer_executor e "
+            "implementer_model_resolution."
+        )
+
+    excluded: list[dict[str, object]] = []
+    after_identity: list[str] = []
+    implementer_cost_tiers: set[str] = set()
+
+    for resource_id, resource in sorted(resources.items()):
+        if resource.executor_id == implementer_exec:
+            implementer_cost_tiers.add(resource.cost_tier)
+            excluded.append({"id": resource_id, "reason": "same_executor_as_implementer"})
+            continue
+        if resource.model_resolution == implementer_resolution:
+            implementer_cost_tiers.add(resource.cost_tier)
+            excluded.append(
+                {"id": resource_id, "reason": "same_model_resolution_as_implementer"}
+            )
+            continue
+        after_identity.append(resource_id)
+
+    identity_resources = {
+        resource_id: resources[resource_id] for resource_id in after_identity
+    }
+    ordered, wrapper_payload = select_resource_candidates(
+        identity_resources,
+        availability=availability,
+        work_class=WORK_CLASS_INDEPENDENT_REVIEW,
+        required_capabilities=required_capabilities,
+        data_sensitivity=data_sensitivity,
+        preferred_order=preferred_order,
+    )
+    filtered = list(wrapper_payload.get("filtered") or [])
+    filtered_set = set(filtered)
+    required = tuple(
+        item.strip() for item in (required_capabilities or ()) if str(item).strip()
+    )
+    for resource_id in after_identity:
+        if resource_id in filtered_set:
+            continue
+        resource = resources[resource_id]
+        state = normalize_availability(availability.get(resource_id))
+        if state not in SELECTABLE_AVAILABILITY_STATES:
+            excluded.append({"id": resource_id, "reason": f"availability:{state}"})
+            continue
+        if required and not set(required).issubset(resource.capabilities):
+            excluded.append({"id": resource_id, "reason": "missing_required_capabilities"})
+            continue
+        if data_sensitivity == "local-only" and resource.data_sensitivity != "local-only":
+            excluded.append({"id": resource_id, "reason": "data_sensitivity_mismatch"})
+            continue
+        excluded.append({"id": resource_id, "reason": "filtered_out"})
+    # Prefer another model family (cost_tier) without consulting model names.
+    if implementer_cost_tiers:
+        other_family = [
+            resource_id
+            for resource_id in ordered
+            if resources[resource_id].cost_tier not in implementer_cost_tiers
+        ]
+        same_family = [
+            resource_id
+            for resource_id in ordered
+            if resources[resource_id].cost_tier in implementer_cost_tiers
+        ]
+        ordered = other_family + same_family
+
+    skip_reasons = list(excluded)
+    if not ordered:
+        raise AgentRoleError(
+            "No hay un reviewer independiente disponible. "
+            + "; ".join(f"{item['id']}={item['reason']}" for item in skip_reasons),
+            skip_reasons=skip_reasons,
+        )
+
+    selected = ordered[0]
+    reason_parts = [
+        f"excluded {item['id']} ({item['reason']})" for item in excluded[:3]
+    ]
+    selection_reason = (
+        "; ".join(reason_parts)
+        if reason_parts
+        else "independent candidate after implementer exclusion"
+    )
+    payload: dict[str, object] = {
+        "role": ROLE_REVIEWER,
+        "candidates": ordered,
+        "selected": selected,
+        "selection_basis": (
+            "capability_filter_then_preferred_order_with_implementer_exclusion"
+        ),
+        "selection_reason": selection_reason,
+        "excluded": excluded,
+        "skip_reasons": skip_reasons,
+        "implementer_executor": implementer_exec,
+        "implementer_model_resolution": implementer_resolution,
+    }
+    return ordered, payload

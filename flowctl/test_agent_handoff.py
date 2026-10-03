@@ -75,10 +75,83 @@ class AgentHandoffTests(unittest.TestCase):
             self.assertTrue(output["ready_for_agent"])
             self.assertEqual([], output["blocked_actions"])
             self.assertEqual("core", output["slices"][0]["name"])
+            self.assertIn("implementer_executor", output["slices"][0])
+            self.assertIn("implementer_model_resolution", output["slices"][0])
+            self.assertEqual("", output["slices"][0]["implementer_executor"])
+            self.assertEqual("", output["slices"][0]["implementer_model_resolution"])
             self.assertTrue((root / str(output["json_report"])).is_file())
             self.assertTrue((root / str(output["markdown_report"])).is_file())
             self.assertTrue((handoff_root / "sample" / spec_path.name).is_file())
             self.assertTrue((handoff_root / "sample" / plan_path.name).is_file())
+
+    def test_agent_handoff_declares_implementer_identity_from_plan_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = root / "specs" / "features" / "sample.spec.md"
+            plan_path = root / ".flow" / "plans" / "sample.json"
+            report_root = root / ".flow" / "reports"
+            evidence_root = report_root / "evidence"
+            handoff_root = report_root / "agent-handoffs"
+            spec_path.parent.mkdir(parents=True)
+            plan_path.parent.mkdir(parents=True)
+            (report_root / "ci").mkdir(parents=True)
+            spec_path.write_text("---\nname: Sample\nstatus: approved\n---\n# Sample\n", encoding="utf-8")
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "feature": "sample",
+                        "slices": [
+                            {
+                                "name": "core",
+                                "repo": "root",
+                                "branch": "feat/sample-core",
+                                "worktree": ".worktrees/root-sample-core",
+                                "owned_targets": ["../../flow"],
+                                "acceptable_evidence": ["python3 -m unittest flowctl.test_agent_handoff"],
+                                "executor_mode": "compliance-closeout",
+                                "implementer_executor": "opencode-local",
+                                "implementer_model_resolution": "worker_profile",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (report_root / "ci" / "spec-sample.json").write_text(
+                json.dumps({"items": [{"spec": str(spec_path), "status": "passed"}]}),
+                encoding="utf-8",
+            )
+            state = {
+                "last_approval": {
+                    "spec_hash": file_sha256(spec_path),
+                    "spec_mtime_ns": spec_path.stat().st_mtime_ns,
+                },
+                "plan_approval": {
+                    "status": "approved",
+                    "spec_hash": file_sha256(spec_path),
+                    "plan_hash": file_sha256(plan_path),
+                    "plan_json": ".flow/plans/sample.json",
+                },
+            }
+
+            payload = agent_handoff_payload(
+                slug="sample",
+                spec_path=spec_path,
+                plan_path=plan_path,
+                state=state,
+                report_root=report_root,
+                evidence_report_root=evidence_root,
+                handoff_report_root=handoff_root,
+                root=root,
+                rel=lambda path: str(path.relative_to(root)),
+                utc_now=lambda: "2026-04-17T00:00:00Z",
+            )
+
+            self.assertEqual("opencode-local", payload["slices"][0]["implementer_executor"])
+            self.assertEqual(
+                "worker_profile",
+                payload["slices"][0]["implementer_model_resolution"],
+            )
 
     def test_agent_handoff_reports_blockers_when_evidence_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
